@@ -96,4 +96,7 @@ export interface DashboardStats {
     campaignTitle: string;
     donatedAt: string;
   }>;
+  // NEW: For charts
+  donationTrends: Array<{ date: string; amount: number }>;
+  topCampaigns: Array<{ title: string; raised: number; goal: number }>;
 }

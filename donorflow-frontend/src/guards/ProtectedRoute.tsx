@@ -8,24 +8,21 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
-  const { isAuthenticated, user, isLoading } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   const location = useLocation();
 
-  if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-600 border-t-transparent" />
-      </div>
-    );
-  }
+  console.log('🔒 ProtectedRoute check:', { isAuthenticated, user, path: location.pathname });
 
   if (!isAuthenticated || !user) {
+    console.log('🚫 Not authenticated, redirecting to /login');
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
+    console.log('❌ Wrong role, redirecting to unauthorized');
     return <Navigate to="/unauthorized" replace />;
   }
 
+  console.log('✅ Access granted');
   return <>{children}</>;
 }

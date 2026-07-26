@@ -6,6 +6,7 @@ import {
   FiDollarSign,
   FiBarChart2,
   FiSettings,
+  FiUserPlus
 } from 'react-icons/fi';
 
 const menuItems = [
@@ -15,6 +16,7 @@ const menuItems = [
   { label: 'Donations', path: '/donations', icon: FiDollarSign },
   { label: 'Reports', path: '/reports', icon: FiBarChart2 },
   { label: 'Settings', path: '/settings', icon: FiSettings },
+  { label: 'Team Members', path: '/users', icon: FiUserPlus },
 ];
 
 export function Sidebar() {
