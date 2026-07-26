@@ -145,6 +145,122 @@ export class DonorsService {
     return { created, skipped };
   }
 
+  // ✅ NEW: CSV Import Method
+  async importDonorsFromCsv(
+    organizationId: number,
+    csvBuffer: Buffer,
+  ): Promise<{
+    imported: number;
+    skipped: number;
+    errors: Array<{ row: number; name: string; error: string }>;
+  }> {
+    const csvText = csvBuffer.toString('utf-8');
+    const lines = csvText.split(/\r?\n/).filter((line) => line.trim() !== '');
+
+    if (lines.length < 2) {
+      return { imported: 0, skipped: 0, errors: [{ row: 1, name: 'N/A', error: 'CSV file is empty or has no data rows' }] };
+    }
+
+    // Parse header row to find column indices
+    const headers = this.parseCsvLine(lines[0]).map((h) => h.trim().toLowerCase());
+    const nameIndex = headers.findIndex((h) => h === 'name' || h === 'full name' || h === 'fullname');
+    const emailIndex = headers.findIndex((h) => h === 'email');
+    const phoneIndex = headers.findIndex((h) => h === 'phone');
+    const addressIndex = headers.findIndex((h) => h === 'address');
+
+    if (nameIndex === -1 || emailIndex === -1) {
+      return {
+        imported: 0,
+        skipped: 0,
+        errors: [{ row: 1, name: 'N/A', error: 'CSV must have "name" and "email" columns' }],
+      };
+    }
+
+    let imported = 0;
+    let skipped = 0;
+    const errors: Array<{ row: number; name: string; error: string }> = [];
+
+    // Process each data row (skip header)
+    for (let i = 1; i < lines.length; i++) {
+      const rowNumber = i + 1;
+      const columns = this.parseCsvLine(lines[i]);
+
+      const name = (columns[nameIndex] || '').trim();
+      const email = (columns[emailIndex] || '').trim().toLowerCase();
+      const phone = phoneIndex !== -1 ? (columns[phoneIndex] || '').trim() : '';
+      const address = addressIndex !== -1 ? (columns[addressIndex] || '').trim() : '';
+
+      // Validate required fields
+      if (!name || !email) {
+        errors.push({ row: rowNumber, name: name || 'N/A', error: 'Missing required fields: name and email' });
+        continue;
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        errors.push({ row: rowNumber, name, error: `Invalid email format: ${email}` });
+        continue;
+      }
+
+      // Check for duplicate email in this organization
+      const existing = await this.prisma.donor.findFirst({
+        where: { organizationId, email },
+      });
+
+      if (existing) {
+        skipped++;
+        continue;
+      }
+
+      // Create the donor
+      try {
+        await this.prisma.donor.create({
+          data: {
+            fullName: name,
+            email,
+            phone: phone || null,
+            address: address || null,
+            organizationId,
+            isActive: true,
+          },
+        });
+        imported++;
+      } catch (err) {
+        errors.push({ row: rowNumber, name, error: 'Database error while creating donor' });
+      }
+    }
+
+    return { imported, skipped, errors };
+  }
+
+  // ✅ Helper: Parse a single CSV line (handles quoted fields with commas)
+  private parseCsvLine(line: string): string[] {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        result.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current);
+    return result;
+  }
+
   async exportToCsv(organizationId: number): Promise<string> {
     if (!organizationId) {
       throw new ForbiddenException('User does not belong to an organization');

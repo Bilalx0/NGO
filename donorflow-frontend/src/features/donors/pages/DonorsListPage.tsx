@@ -10,17 +10,20 @@ import { formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { toast } from 'sonner';
 import { useDebounce } from '@/hooks/useDebounce';
+import { DonorImportModal } from '../components/DonorImportModal';
 
 export function DonorsListPage() {
   const { user } = useAuthStore();
-  
+
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
   // CRITICAL: Separate local input state from query filters
   const [searchInput, setSearchInput] = useState('');
   const [filters, setFilters] = useState<DonorFiltersInput>({ page: 1, limit: 10 });
-  
+
   // Debounce the search (500ms delay)
   const debouncedSearch = useDebounce(searchInput, 500);
-  
+
   // Only update filters when debounced value changes
   useEffect(() => {
     setFilters((prev) => ({
@@ -65,7 +68,7 @@ export function DonorsListPage() {
               <Button variant="outline" onClick={handleExport}>
                 <FiDownload className="mr-2 h-4 w-4" /> Export CSV
               </Button>
-              <Button variant="outline" onClick={() => toast.info('CSV Import coming soon!')}>
+              <Button variant="outline" onClick={() => setIsImportModalOpen(true)}>
                 <FiUpload className="mr-2 h-4 w-4" /> Import CSV
               </Button>
             </>
@@ -210,6 +213,8 @@ export function DonorsListPage() {
           </>
         )}
       </div>
+      <DonorImportModal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} />
     </div>
+
   );
 }

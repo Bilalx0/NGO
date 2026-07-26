@@ -10,8 +10,12 @@ import {
   Post,
   Query,
   Res,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, ApiConsumes } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import type { Response } from 'express';
 import { CurrentOrganization } from '../common/decorators/current-organization.decorator';
@@ -19,7 +23,6 @@ import type { JwtUserPayload } from '../common/decorators/current-user.decorator
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CreateDonorDto } from './dto/create-donor.dto';
-import { ImportDonorsDto } from './dto/import-donors.dto';
 import { UpdateDonorDto } from './dto/update-donor.dto';
 import { DonorsService } from './donors.service';
 
@@ -44,20 +47,42 @@ export class DonorsController {
     return this.donorsService.create(organizationId, user.sub, dto);
   }
 
+  // ✅ REPLACED: Now accepts CSV file upload instead of JSON array
   @Post('import')
   @Roles(UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Bulk import donors from JSON array' })
+  @ApiOperation({ summary: 'Import donors from CSV file' })
+  @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 201, description: 'Donors imported successfully' })
+  @UseInterceptors(FileInterceptor('file', {
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, callback) => {
+      if (!file.mimetype.includes('csv') && !file.originalname.endsWith('.csv')) {
+        return callback(new BadRequestException('Only CSV files are allowed'), false);
+      }
+      callback(null, true);
+    },
+  }))
   async importDonors(
     @CurrentOrganization() organizationId: number | null,
-    @CurrentUser() user: JwtUserPayload,
-    @Body() dto: ImportDonorsDto,
+    @UploadedFile() file: Express.Multer.File,
   ) {
     if (!organizationId) {
       throw new ForbiddenException('User does not belong to an organization');
     }
-    return this.donorsService.bulkCreate(organizationId, user.sub, dto.donors);
+    if (!file) {
+      throw new BadRequestException('CSV file is required');
+    }
+
+    const result = await this.donorsService.importDonorsFromCsv(
+      organizationId,
+      file.buffer,
+    );
+
+    return {
+      message: `Successfully imported ${result.imported} donors. ${result.skipped} duplicates skipped. ${result.errors.length} errors.`,
+      ...result,
+    };
   }
 
   @Get('export')
@@ -111,7 +136,7 @@ export class DonorsController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.ORG_ADMIN, UserRole.STAFF, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Update a donor' })
   @ApiResponse({ status: 200, description: 'Donor updated successfully' })
