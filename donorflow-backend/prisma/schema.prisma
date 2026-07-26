@@ -22,15 +22,19 @@ enum CampaignStatus {
 }
 
 model User {
-  id             Int       @id @default(autoincrement())
-  email          String    @unique
-  passwordHash   String
-  name           String
-  phone          String?
-  role           UserRole  @default(STAFF)
-  isActive       Boolean   @default(true)
-  organizationId Int?
-  organization   Organization? @relation("OrganizationMembers", fields: [organizationId], references: [id])
+  id                  Int       @id @default(autoincrement())
+  email               String    @unique
+  passwordHash        String
+  name                String
+  phone               String?
+  role                UserRole  @default(STAFF)
+  isActive            Boolean   @default(true)
+  organizationId      Int?
+  organization        Organization? @relation("OrganizationMembers", fields: [organizationId], references: [id])
+
+
+  passwordResetToken  String?
+  passwordResetExpiry DateTime?
 
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
@@ -118,6 +122,8 @@ model Campaign {
   startDate       DateTime?
   endDate         DateTime?
   isActive        Boolean       @default(true)
+
+  presetAmounts   String? 
 
   createdById     Int?
   createdBy       User?         @relation("CampaignCreator", fields: [createdById], references: [id])

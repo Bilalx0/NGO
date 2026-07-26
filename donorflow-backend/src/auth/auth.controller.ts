@@ -6,6 +6,7 @@ import {
   Req,
   Res,
   UseGuards,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -22,6 +23,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -83,17 +85,25 @@ export class AuthController {
   @ApiOperation({ summary: 'Refresh access token' })
   @ApiResponse({ status: 200, description: 'Access token refreshed' })
   async refresh(
-    @Body() dto: RefreshTokenDto,
+    @Req() request: Request, // <-- CHANGE: Read from Request to get cookies
     @Res({ passthrough: true }) response: Response,
-  ): Promise<{ accessToken: string }> {
-    const { accessToken } = await this.authService.refreshToken(dto.refreshToken);
+  ): Promise<{ message: string }> {
+    const refreshToken = request.cookies['refresh_token'];
+
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token not found');
+    }
+
+    const { accessToken } = await this.authService.refreshToken(refreshToken);
+
     response.cookie('access_token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 15 * 60 * 1000,
+      maxAge: 15 * 60 * 1000, // 15 minutes
     });
-    return { accessToken };
+
+    return { message: 'Token refreshed successfully' };
   }
 
   @Get('profile')
@@ -101,9 +111,9 @@ export class AuthController {
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get current user profile' })
   @ApiResponse({ status: 200, description: 'User profile returned' })
-  async getProfile(@Req() request: Request): Promise<unknown> {
-    const user = request.user as { userId: number };
-    return this.authService.getProfile(user.userId);
+  async getProfile(@CurrentUser() user: { sub: number }) {
+    // ✅ Use user.sub (the correct JWT payload field)
+    return this.authService.getProfile(user.sub);
   }
 
   @Public()

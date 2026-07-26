@@ -7,12 +7,15 @@ import { DonorReportDto } from './dto/donor-report.dto';
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async getDashboardStats(organizationId: number) {
     if (!organizationId) {
       throw new ForbiddenException('User does not belong to an organization');
     }
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     const [
       totalRaised,
@@ -20,24 +23,26 @@ export class ReportsService {
       activeCampaigns,
       recentDonations,
       monthlyDonations,
+      trendDonations,
+      topCampaigns,
     ] = await Promise.all([
-      // Total funds raised (all time)
+      // 1. Total funds raised (all time)
       this.prisma.donation.aggregate({
         where: { organizationId },
         _sum: { amount: true },
       }),
 
-      // Total unique donors
+      // 2. Total unique donors
       this.prisma.donor.count({
         where: { organizationId, isActive: true },
       }),
 
-      // Active campaigns count
+      // 3. Active campaigns count
       this.prisma.campaign.count({
-        where: { organizationId, status: CampaignStatus.Active, isActive: true },
+        where: { organizationId, status: 'Active' as any, isActive: true },
       }),
 
-      // Recent donations (last 5)
+      // 4. Recent donations (last 5)
       this.prisma.donation.findMany({
         where: { organizationId },
         include: { donor: true, campaign: true },
@@ -45,7 +50,7 @@ export class ReportsService {
         take: 5,
       }),
 
-      // Donations this month
+      // 5. Donations this month
       this.prisma.donation.aggregate({
         where: {
           organizationId,
@@ -55,20 +60,56 @@ export class ReportsService {
         },
         _sum: { amount: true },
       }),
+
+      // 6. NEW: Donations in last 30 days for trend chart
+      this.prisma.donation.findMany({
+        where: {
+          organizationId,
+          donatedAt: { gte: thirtyDaysAgo },
+        },
+        select: { amount: true, donatedAt: true },
+        orderBy: { donatedAt: 'asc' },
+      }),
+
+      // 7. NEW: Top 3 campaigns by amount raised
+      this.prisma.campaign.findMany({
+        where: { organizationId, isActive: true },
+        orderBy: { currentAmount: 'desc' },
+        take: 3,
+        select: { title: true, currentAmount: true, goalAmount: true },
+      }),
     ]);
+
+    // Process trend data: group by day (YYYY-MM-DD)
+    const dailyTrends: Record<string, number> = {};
+    trendDonations.forEach((d: any) => {
+      const dateStr = d.donatedAt.toISOString().split('T')[0];
+      dailyTrends[dateStr] = (dailyTrends[dateStr] || 0) + d.amount.toNumber();
+    });
+
+    const donationTrends = Object.entries(dailyTrends).map(([date, amount]) => ({
+      date,
+      amount,
+    }));
 
     return {
       totalRaised: totalRaised._sum.amount?.toNumber() || 0,
       totalDonors,
       activeCampaigns,
-      recentDonations: recentDonations.map((d) => ({
+      monthlyRaised: monthlyDonations._sum.amount?.toNumber() || 0,
+      recentDonations: recentDonations.map((d: any) => ({
         id: d.id,
         amount: d.amount.toNumber(),
         donorName: d.donor?.fullName || 'Anonymous',
         campaignTitle: d.campaign?.title || 'General',
         donatedAt: d.donatedAt,
       })),
-      monthlyRaised: monthlyDonations._sum.amount?.toNumber() || 0,
+      donationTrends,
+      topCampaigns: topCampaigns.map((c: any) => ({
+        title: c.title,
+        raised: c.currentAmount.toNumber(),
+        goal: c.goalAmount.toNumber(),
+      })),
     };
   }
 
@@ -81,11 +122,11 @@ export class ReportsService {
       organizationId,
       ...(filters.startDate || filters.endDate
         ? {
-            donatedAt: {
-              ...(filters.startDate ? { gte: new Date(filters.startDate) } : {}),
-              ...(filters.endDate ? { lte: new Date(filters.endDate) } : {}),
-            },
-          }
+          donatedAt: {
+            ...(filters.startDate ? { gte: new Date(filters.startDate) } : {}),
+            ...(filters.endDate ? { lte: new Date(filters.endDate) } : {}),
+          },
+        }
         : {}),
       ...(filters.campaignId ? { campaignId: filters.campaignId } : {}),
       ...(filters.paymentMethod ? { paymentMethod: filters.paymentMethod } : {}),
@@ -244,7 +285,7 @@ export class ReportsService {
     const csvContent = [
       headers.join(','),
       ...rows.map((row) =>
-       row.map((cell) => `"${String(cell || '').replace(/"/g, '""')}"`).join(',')
+        row.map((cell) => `"${String(cell || '').replace(/"/g, '""')}"`).join(',')
       ),
     ].join('\n');
 

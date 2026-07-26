@@ -41,6 +41,7 @@ export class CampaignsService {
         bannerImageUrl: dto.bannerImageUrl,
         startDate: dto.startDate ? new Date(dto.startDate) : null,
         endDate: dto.endDate ? new Date(dto.endDate) : null,
+        presetAmounts: dto.presetAmounts,
         status: dto.status ?? CampaignStatus.Draft,
       },
     });
@@ -108,6 +109,7 @@ export class CampaignsService {
         ...(dto.bannerImageUrl !== undefined ? { bannerImageUrl: dto.bannerImageUrl } : {}),
         ...(dto.startDate !== undefined ? { startDate: new Date(dto.startDate) } : {}),
         ...(dto.endDate !== undefined ? { endDate: new Date(dto.endDate) } : {}),
+        ...(dto.presetAmounts !== undefined ? { presetAmounts: dto.presetAmounts } : {}),
         ...(dto.status !== undefined ? { status: dto.status } : {}),
       },
     });

@@ -169,6 +169,33 @@ export class DonationsService {
     });
   }
 
+  async getReceiptByNumber(receiptNumber: string) {
+    const donation = await this.prisma.donation.findUnique({
+      where: { receiptNumber },
+      include: {
+        donor: true,
+        campaign: true,
+      },
+    });
+
+    if (!donation) {
+      throw new NotFoundException('Receipt not found');
+    }
+
+    return {
+      receiptNumber: donation.receiptNumber,
+      amount: donation.amount,
+      currency: donation.currency,
+      donorName: donation.donor?.fullName || 'Anonymous',
+      donorEmail: donation.donor?.email || null,
+      donorPhone: donation.donor?.phone || 'N/A',
+      campaignTitle: donation.campaign?.title || 'General Fund',
+      paymentMethod: donation.paymentMethod || 'N/A',
+      paymentReference: donation.paymentReference || null,
+      donatedAt: donation.donatedAt,
+    };
+  }
+
   async findAll(organizationId: number, page: number, limit: number) {
     if (!organizationId) {
       throw new ForbiddenException('User does not belong to an organization');

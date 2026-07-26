@@ -41,6 +41,10 @@ export class CreateCampaignDto {
   @IsDateString()
   endDate?: string;
 
+  @IsString()
+  @IsOptional()
+  presetAmounts?: string;
+
   @ApiPropertyOptional({ enum: CampaignStatus, default: CampaignStatus.Draft, description: 'Campaign status' })
   @IsOptional()
   @IsEnum(CampaignStatus)

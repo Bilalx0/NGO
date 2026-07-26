@@ -3,13 +3,14 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { MailService } from 'src/mail/mail.service';
 
 @Injectable()
 export class AuthService {
@@ -18,6 +19,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly mailService: MailService,
   ) { }
 
   async register(dto: RegisterDto): Promise<{ message: string }> {
@@ -122,53 +124,66 @@ export class AuthService {
     return { accessToken };
   }
 
-  async forgotPassword(dto: ForgotPasswordDto): Promise<{ message: string }> {
-    const user = await this.usersService.findByEmail(dto.email);
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+
     if (!user) {
-      return { message: 'If the email exists, a password reset link has been generated' };
+      // Don't reveal if user exists (security best practice)
+      return { message: 'If an account exists, a reset link has been sent' };
     }
 
-    const token = randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+    // Generate reset token
+    const resetToken = randomBytes(32).toString('hex');
+    const resetTokenHash = createHash('sha256').update(resetToken).digest('hex');
+    const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    await this.prisma.passwordResetToken.create({
+    await this.prisma.user.update({
+      where: { id: user.id },
       data: {
-        token,
-        userId: user.id,
-        expiresAt,
+        passwordResetToken: resetTokenHash,
+        passwordResetExpiry: resetTokenExpiry,
       },
     });
 
-    console.log(`Password reset link for ${dto.email}: /reset-password?token=${token}`);
+    // Send password reset email
+    const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}`;
+    await this.mailService.sendPasswordReset(user.email, user.name, resetLink);
 
-    return { message: 'If the email exists, a password reset link has been generated' };
+    return { message: 'If an account exists, a reset link has been sent' };
   }
 
-  async resetPassword(dto: ResetPasswordDto): Promise<{ message: string }> {
-    const tokenRecord = await this.prisma.passwordResetToken.findFirst({
+   async resetPassword(dto: ResetPasswordDto): Promise<{ message: string }> {
+    // 1. Hash the incoming token to match what we stored in the database
+    const tokenHash = createHash('sha256').update(dto.token).digest('hex');
+
+    // 2. Find the user with this token hash AND a non-expired date
+    const user = await this.prisma.user.findFirst({
       where: {
-        token: dto.token,
-        used: false,
-        expiresAt: { gt: new Date() },
+        passwordResetToken: tokenHash,
+        passwordResetExpiry: {
+          gt: new Date(), // Token must not be expired
+        },
       },
     });
 
-    if (!tokenRecord) {
+    if (!user) {
       throw new BadRequestException('Invalid or expired reset token');
     }
 
+    // 3. Hash the new password
     const passwordHash = await bcrypt.hash(dto.newPassword, 12);
 
-    await this.prisma.$transaction([
-      this.prisma.user.update({
-        where: { id: tokenRecord.userId },
-        data: { passwordHash },
-      }),
-      this.prisma.passwordResetToken.update({
-        where: { id: tokenRecord.id },
-        data: { used: true },
-      }),
-    ]);
+    // 4. Update the user's password and clear the reset token fields
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        passwordResetToken: null,      // Clear the token so it can't be reused
+        passwordResetExpiry: null,     // Clear the expiry
+      },
+    });
 
     return { message: 'Password reset successful' };
   }

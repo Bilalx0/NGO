@@ -73,8 +73,8 @@ export class CampaignsController {
   @ApiResponse({ status: 200, description: 'Campaigns returned successfully' })
   async findAll(
     @CurrentOrganization() organizationId: number | null,
-    @Query('page', ParseIntPipe) page = 1,
-    @Query('limit', ParseIntPipe) limit = 10,
+    @Query('page', new ParseIntPipe({ optional: true })) page = 1, 
+    @Query('limit', new ParseIntPipe({ optional: true })) limit = 10,
     @Query('search') search?: string,
   ) {
     if (!organizationId) {

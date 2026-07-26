@@ -3,16 +3,22 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ConflictException
 } from '@nestjs/common';
 import { Prisma, User, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { MailService } from '../mail/mail.service';
+import { createHash, randomBytes } from 'crypto';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+  ) { }
 
   async findByEmail(email: string): Promise<User | null> {
     return this.prisma.user.findUnique({
@@ -32,8 +38,55 @@ export class UsersService {
     return user;
   }
 
-  async create(data: Prisma.UserCreateInput): Promise<User> {
-    return this.prisma.user.create({ data });
+  async create(organizationId: number | null, dto: any) {
+    console.log('🚀 [DEBUG] UsersService.create called with orgId:', organizationId, 'and data:', dto);
+
+    if (!organizationId) {
+      throw new ForbiddenException('User does not belong to an organization');
+    }
+
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+
+    if (existingUser) {
+      throw new ConflictException('User with this email already exists');
+    }
+
+    const resetToken = randomBytes(32).toString('hex');
+    const resetTokenHash = createHash('sha256').update(resetToken).digest('hex');
+    const resetTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    const user = await this.prisma.user.create({
+      data: {
+        name: dto.name,
+        email: dto.email,
+        role: dto.role,
+        organizationId,
+        passwordHash: 'temporary',
+        passwordResetToken: resetTokenHash,
+        passwordResetExpiry: resetTokenExpiry,
+      },
+    });
+
+    console.log('✅ [DEBUG] User created in database. ID:', user.id);
+
+    // SEND THE EMAIL
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const inviteLink = `${frontendUrl}/reset-password?token=${resetToken}`;
+
+    console.log('📧 [DEBUG] Attempting to send email to:', user.email);
+    console.log('🔗 [DEBUG] Invite link:', inviteLink);
+
+    try {
+      await this.mailService.sendUserInvitation(user.email, user.name, inviteLink);
+      console.log('🎉 [DEBUG] Email sent successfully!');
+    } catch (emailError) {
+      console.error('❌ [DEBUG] Email failed to send:', emailError);
+      // We don't throw here so the user is still created even if email fails
+    }
+
+    return user;
   }
 
   async updateRefreshToken(
@@ -67,9 +120,14 @@ export class UsersService {
       throw new BadRequestException('Email already registered');
     }
 
-    // Generate a temporary password
+    // Generate a temporary password (fallback)
     const tempPassword = `Temp${Date.now().toString().slice(-6)}!`;
     const passwordHash = await bcrypt.hash(tempPassword, 12);
+
+    // Generate reset token for the "Set Password" invitation link
+    const resetToken = randomBytes(32).toString('hex');
+    const resetTokenHash = createHash('sha256').update(resetToken).digest('hex');
+    const resetTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     // Create the staff member
     const user = await this.prisma.user.create({
@@ -81,8 +139,25 @@ export class UsersService {
         role: dto.role || UserRole.STAFF,
         organizationId,
         isActive: true,
+        passwordResetToken: resetTokenHash, // ✅ Added for invitation link
+        passwordResetExpiry: resetTokenExpiry, // ✅ Added for invitation link
       },
     });
+
+    // ✅ SEND THE INVITATION EMAIL
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const inviteLink = `${frontendUrl}/reset-password?token=${resetToken}`;
+
+    console.log('📧 [DEBUG] Attempting to send invitation email to:', user.email);
+    console.log('🔗 [DEBUG] Invite link:', inviteLink);
+
+    try {
+      await this.mailService.sendUserInvitation(user.email, user.name, inviteLink);
+      console.log('🎉 [DEBUG] Invitation email sent successfully!');
+    } catch (emailError) {
+      console.error('❌ [DEBUG] Email failed to send:', emailError);
+      // We don't throw here so the user is still created even if email fails
+    }
 
     // Exclude passwordHash from response
     const { passwordHash: _, ...userWithoutPassword } = user;
@@ -106,14 +181,13 @@ export class UsersService {
   }> {
     const where: Prisma.UserWhereInput = {
       organizationId,
-      isActive: true,
       ...(search
         ? {
-            OR: [
-              { name: { contains: search, mode: 'insensitive' } },
-              { email: { contains: search, mode: 'insensitive' } },
-            ],
-          }
+          OR: [
+            { name: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+          ],
+        }
         : {}),
     };
 
@@ -202,5 +276,35 @@ export class UsersService {
     });
 
     return { message: 'User deactivated successfully' };
+  }
+
+    async deleteUser(
+    organizationId: number,
+    userId: number,
+    currentUserId: number,
+  ): Promise<{ message: string }> {
+    // Prevent self-deletion
+    if (userId === currentUserId) {
+      throw new BadRequestException('You cannot delete your own account');
+    }
+
+    // Verify the user belongs to this organization
+    const user = await this.prisma.user.findFirst({
+      where: {
+        id: userId,
+        organizationId,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found or access denied');
+    }
+
+    // Permanently delete the user
+    await this.prisma.user.delete({
+      where: { id: userId }
+    });
+
+    return { message: 'User permanently deleted' };
   }
 }

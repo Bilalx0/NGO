@@ -12,6 +12,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { UsersModule } from './users/users.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
@@ -19,7 +20,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     ThrottlerModule.forRoot([
       {
         ttl: 60000,
-        limit: 10,
+        limit: 100,
       },
     ]),
     PrismaModule,
@@ -30,6 +31,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     DonorsModule,
     DonationsModule,
     ReportsModule,
+    MailModule,
   ],
   providers: [
     {

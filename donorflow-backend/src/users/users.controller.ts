@@ -11,7 +11,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
+import { UserRole, User } from '@prisma/client'; // ✅ Added User import
 import { CurrentOrganization } from '../common/decorators/current-organization.decorator';
 import type { JwtUserPayload } from '../common/decorators/current-user.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -34,13 +34,16 @@ export class UsersController {
     @CurrentOrganization() organizationId: number | null,
     @Body() dto: CreateStaffDto,
   ) {
+    console.log('🎯 [CONTROLLER DEBUG] create endpoint hit!');
+    console.log('🎯 [CONTROLLER DEBUG] organizationId:', organizationId);
+    console.log('🎯 [CONTROLLER DEBUG] dto:', dto);
     if (!organizationId) {
       throw new ForbiddenException('User does not belong to an organization');
     }
     return this.usersService.createStaffMember(organizationId, dto);
   }
 
-@Get()
+  @Get()
   @Roles(UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'List all users for the current organization' })
@@ -78,6 +81,7 @@ export class UsersController {
     return this.usersService.updateUser(organizationId, userId, dto);
   }
 
+  // ✅ SOFT DELETE (Deactivate) - Keeps the original route
   @Delete(':id')
   @Roles(UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN)
   @ApiBearerAuth('access-token')
@@ -96,5 +100,22 @@ export class UsersController {
       userId,
       currentUser.sub,
     );
+  }
+
+  // ✅ HARD DELETE (Permanent) - Uses a different path
+  @Delete(':id/permanent')
+  @Roles(UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Permanently delete a user' })
+  @ApiResponse({ status: 200, description: 'User permanently deleted' })
+  async deleteUser(
+    @CurrentOrganization() organizationId: number | null,
+    @CurrentUser() currentUser: JwtUserPayload,
+    @Param('id', ParseIntPipe) userId: number,
+  ) {
+    if (!organizationId) {
+      throw new ForbiddenException('User does not belong to an organization');
+    }
+    return this.usersService.deleteUser(organizationId, userId, currentUser.sub);
   }
 }

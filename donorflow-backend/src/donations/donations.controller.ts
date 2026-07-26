@@ -22,7 +22,7 @@ import { DonationsService } from './donations.service';
 @ApiTags('donations')
 @Controller('donations')
 export class DonationsController {
-  constructor(private readonly donationsService: DonationsService) {}
+  constructor(private readonly donationsService: DonationsService) { }
 
   @Post()
   @Roles(UserRole.ORG_ADMIN, UserRole.STAFF, UserRole.SUPER_ADMIN)
@@ -47,6 +47,15 @@ export class DonationsController {
   async createPublic(@Body() dto: PublicDonationDto) {
     return this.donationsService.createPublic(dto);
   }
+
+  @Public()
+  @Get('public/receipt/:receiptNumber')
+  @ApiOperation({ summary: 'Get donation receipt by receipt number (public)' })
+  @ApiResponse({ status: 200, description: 'Receipt returned successfully' })
+  async getPublicReceipt(@Param('receiptNumber') receiptNumber: string) {
+    return this.donationsService.getReceiptByNumber(receiptNumber);
+  }
+
 
   @Get()
   @Roles(UserRole.ORG_ADMIN, UserRole.STAFF, UserRole.SUPER_ADMIN)
