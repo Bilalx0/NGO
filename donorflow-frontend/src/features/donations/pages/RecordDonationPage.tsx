@@ -33,7 +33,7 @@ export function RecordDonationPage() {
   });
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<RecordDonationInput>({
-    resolver: zodResolver(recordDonationSchema),
+    resolver: zodResolver(recordDonationSchema) as any,
     defaultValues: { currency: 'PKR', paymentMethod: 'Cash' },
   });
 

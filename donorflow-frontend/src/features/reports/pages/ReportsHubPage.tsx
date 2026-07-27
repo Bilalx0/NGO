@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { FiDollarSign, FiTarget, FiUsers, FiTrendingUp } from 'react-icons/fi';
+import { FiDollarSign, FiTarget, FiUsers } from 'react-icons/fi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export function ReportsHubPage() {

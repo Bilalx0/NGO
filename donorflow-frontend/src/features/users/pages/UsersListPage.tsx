@@ -52,7 +52,7 @@ export function UsersListPage() {
   };
 
   // Ensure we always have an array to filter (handles both direct array and { data: [] } formats)
-  const usersArray = Array.isArray(users) ? users : (users?.data || []);
+  const usersArray = Array.isArray(users) ? users : ((users as any)?.data || []);
 
   const filteredUsers = usersArray.filter((u: any) =>
     u.name.toLowerCase().includes(searchInput.toLowerCase()) ||

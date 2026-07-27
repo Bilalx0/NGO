@@ -91,12 +91,12 @@ export function DonorDetailPage() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Total Donations</p>
-                  <p className="text-2xl font-bold text-foreground">{donor.donations?.length || 0}</p>
+                  <p className="text-2xl font-bold text-foreground">{donor.donations && donor.donations.length || 0}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">First Donation</p>
                   <p className="text-sm font-medium text-foreground">
-                    {donor.donations?.length > 0 ? formatDate(donor.donations[donor.donations.length - 1].donatedAt) : 'N/A'}
+                    {donor.donations && donor.donations.length > 0 ? formatDate(donor.donations[donor.donations.length - 1].donatedAt) : 'N/A'}
                   </p>
                 </div>
               </div>

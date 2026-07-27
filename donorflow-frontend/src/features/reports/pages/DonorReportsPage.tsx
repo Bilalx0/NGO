@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { FiArrowLeft, FiDownload } from 'react-icons/fi';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/axios';
 

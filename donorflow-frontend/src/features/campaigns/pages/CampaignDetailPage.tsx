@@ -15,7 +15,7 @@ export function CampaignDetailPage() {
   const { user } = useAuthStore();
   const { data: campaign, isLoading, error } = useCampaign(Number(id));
   const deleteMutation = useDeleteCampaign();
-  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+ const [, setQrCodeUrl] = useState<string | null>(null);
 
   const canEdit = user?.role === 'ORG_ADMIN' || user?.role === 'STAFF' || user?.role === 'SUPER_ADMIN';
   const canDelete = user?.role === 'ORG_ADMIN' || user?.role === 'SUPER_ADMIN';

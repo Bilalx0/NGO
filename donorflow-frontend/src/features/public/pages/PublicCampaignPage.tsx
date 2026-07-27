@@ -44,7 +44,7 @@ export function PublicCampaignPage() {
 
   // ✅ 2. ADDED 'setValue' HERE
   const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<DonationFormInput>({
-    resolver: zodResolver(donationFormSchema),
+    resolver: zodResolver(donationFormSchema) as any,
     defaultValues: {
       paymentMethod: 'EasyPaisa',
     },

@@ -46,10 +46,10 @@ export function DonorImportModal({ isOpen, onClose }: { isOpen: boolean; onClose
       const response = await api.post('/donors/import', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      
+
       setResult(response.data);
       queryClient.invalidateQueries({ queryKey: ['donors'] }); // Refresh the donor list
-      
+
       if (response.data.errors.length === 0 && response.data.imported > 0) {
         toast.success(`Successfully imported ${response.data.imported} donors!`);
       } else {
@@ -93,18 +93,16 @@ export function DonorImportModal({ isOpen, onClose }: { isOpen: boolean; onClose
                 className="hidden"
                 id="csv-upload"
               />
-              <label htmlFor="csv-upload">
-                <Button variant="outline" asChild className="cursor-pointer">
-                  <span>Choose File</span>
-                </Button>
+              <label htmlFor="csv-upload" className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground cursor-pointer">
+                Choose File
               </label>
               {file && <p className="mt-3 text-sm font-medium text-primary">{file.name}</p>}
             </div>
 
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={handleClose}>Cancel</Button>
-              <Button 
-                onClick={handleUpload} 
+              <Button
+                onClick={handleUpload}
                 disabled={!file || isUploading}
                 className="bg-primary hover:bg-primary-hover"
               >

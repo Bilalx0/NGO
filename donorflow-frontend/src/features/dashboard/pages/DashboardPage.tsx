@@ -1,7 +1,6 @@
 import { FiDollarSign, FiUsers, FiTarget, FiTrendingUp } from 'react-icons/fi';
 import { useDashboardStats } from '@/hooks/useDashboard';
 import { StatsCard } from '@/components/shared/StatsCard';
-import { CampaignProgress } from '@/components/shared/CampaignProgress';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
@@ -132,7 +131,7 @@ export function DashboardPage() {
                   <YAxis dataKey="title" type="category" width={100} tick={{ fontSize: 11, fill: '#0f172a' }} interval={0} />
                   <Tooltip content={<CustomTooltip />} />
                   <Bar dataKey="raised" radius={[0, 4, 4, 0]} barSize={20}>
-                    {stats.topCampaigns.map((entry, index) => (
+                    {stats.topCampaigns.map((_entry, index) => (
                       <Cell key={`cell-${index}`} fill={index === 0 ? '#2563eb' : index === 1 ? '#f59e0b' : '#94a3b8'} />
                     ))}
                   </Bar>

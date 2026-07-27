@@ -13,7 +13,7 @@ interface CampaignFiltersProps {
 
 export function CampaignFilters({ filters, onFilterChange }: CampaignFiltersProps) {
   const { register, handleSubmit, reset, watch } = useForm<CampaignFiltersInput>({
-    resolver: zodResolver(campaignFiltersSchema),
+    resolver: zodResolver(campaignFiltersSchema) as any,
     defaultValues: filters,
   });
 

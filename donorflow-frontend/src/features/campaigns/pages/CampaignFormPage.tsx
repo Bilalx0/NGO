@@ -33,7 +33,7 @@ export function CampaignFormPage() {
   const isEditing = Boolean(id);
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<CampaignInput>({
-    resolver: zodResolver(campaignSchema),
+    resolver: zodResolver(campaignSchema) as any,
   });
 
   // Fetch campaign data if editing

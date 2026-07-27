@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FiPlus, FiDownload } from 'react-icons/fi';
+import { FiPlus } from 'react-icons/fi';
 import { useDonations } from '../hooks/useDonations';
 import type { DonationFiltersInput } from '../schemas/donation.schema';
 import { Button } from '@/components/ui/button';
