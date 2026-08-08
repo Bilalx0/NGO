@@ -83,6 +83,26 @@ export interface Donation {
   donor?: Donor;
 }
 
+export interface Subscription {
+  id: number;
+  organizationId: number;
+  donorId?: number;
+  campaignId?: number;
+  amount: number;
+  currency: string;
+  interval: string;
+  status: string;
+  gatewaySubscriptionId?: string;
+  gatewayCustomerId?: string;
+  currentPeriodEnd?: string;
+  nextBillingDate?: string;
+  cancelledAt?: string;
+  campaign?: Campaign;
+  donor?: Donor;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Dashboard Stats
 export interface DashboardStats {
   totalRaised: number;

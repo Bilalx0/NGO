@@ -24,13 +24,16 @@ export function DonationSuccessPage() {
   const receiptNumber = searchParams.get('receipt');
   const [receipt, setReceipt] = useState<DonationReceipt | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isCancelled, setIsCancelled] = useState(false);
 
   useEffect(() => {
-  const fetchReceipt = async () => {
-    if (!receiptNumber) {
-      setLoading(false);
-      return;
-    }
+    setIsCancelled(searchParams.get('cancelled') === 'true');
+
+    const fetchReceipt = async () => {
+      if (!receiptNumber) {
+        setLoading(false);
+        return;
+      }
 
     try {
       // Try the public receipt endpoint first
@@ -88,9 +91,13 @@ export function DonationSuccessPage() {
       <div className="flex min-h-screen items-center justify-center bg-background">
         <Card className="max-w-md">
           <CardContent className="pt-6 text-center">
-            <p className="text-lg font-semibold text-foreground">Receipt not found</p>
+            <p className="text-lg font-semibold text-foreground">
+              {isCancelled ? 'Donation cancelled' : 'Receipt not found'}
+            </p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Please check your email or contact the organization.
+              {isCancelled
+                ? 'Your payment was cancelled. You may try again or contact the organization.'
+                : 'Please check your email or contact the organization.'}
             </p>
             <Link to="/">
               <Button className="mt-4">Go to Homepage</Button>
@@ -116,9 +123,13 @@ export function DonationSuccessPage() {
           <div className="mb-4 inline-flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
             <FiCheckCircle className="h-12 w-12 text-green-600" />
           </div>
-          <h1 className="text-4xl font-bold text-foreground">Thank You!</h1>
+          <h1 className="text-4xl font-bold text-foreground">
+            {isCancelled ? 'Donation Cancelled' : 'Thank You!'}
+          </h1>
           <p className="mt-2 text-lg text-muted-foreground">
-            Your donation has been successfully recorded.
+            {isCancelled
+              ? 'Your payment was cancelled. No donation was recorded.'
+              : 'Your donation has been successfully recorded.'}
           </p>
         </div>
 

@@ -2,6 +2,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import * as express from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
@@ -10,6 +11,7 @@ async function bootstrap(): Promise<void> {
   app.setGlobalPrefix('api', {
     exclude: ['/', '/docs'],
   });
+  app.use('/api/payments/webhook', express.raw({ type: '*/*' }));
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

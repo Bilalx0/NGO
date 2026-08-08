@@ -1,8 +1,11 @@
 import { Outlet } from 'react-router-dom';
+import { useDynamicTheme } from '@/hooks/use-dynamic-theme';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 
 export function AppLayout() {
+  useDynamicTheme();
+
   return (
     <div className="flex h-screen bg-slate-50">
       <Sidebar />

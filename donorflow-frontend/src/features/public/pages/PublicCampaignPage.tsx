@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -17,7 +17,7 @@ const donationFormSchema = z.object({
   donorPhone: z.string().min(10, 'Phone number is required'),
   amount: z.coerce.number().min(1, 'Amount must be at least 1'),
   paymentMethod: z.string().min(1, 'Payment method is required'),
-  paymentReference: z.string().optional(),
+  isMonthly: z.boolean().optional(),
 });
 
 type DonationFormInput = z.infer<typeof donationFormSchema>;
@@ -37,7 +37,6 @@ interface Campaign {
 
 export function PublicCampaignPage() {
   const { slug } = useParams<{ slug: string }>();
-  const navigate = useNavigate();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -47,6 +46,7 @@ export function PublicCampaignPage() {
     resolver: zodResolver(donationFormSchema) as any,
     defaultValues: {
       paymentMethod: 'EasyPaisa',
+      isMonthly: false,
     },
   });
 
@@ -67,15 +67,21 @@ export function PublicCampaignPage() {
 
   const onSubmit = async (data: DonationFormInput) => {
     try {
-      const response = await api.post('/donations/public', {
+      const response = await api.post('/payments/create-session', {
         campaignSlug: slug,
         ...data,
       });
 
-      // Navigate to success page with receipt number
-      navigate(`/donate/success?receipt=${response.data.receiptNumber}`);
+      const checkoutUrl = response.data?.checkoutUrl;
+      if (typeof checkoutUrl === 'string' && checkoutUrl.length > 0) {
+        window.location.href = checkoutUrl;
+        return;
+      }
+
+      console.error('Invalid checkoutUrl response:', response.data);
+      toast.error('Unable to create payment session. Please try again later.');
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to process donation');
+      toast.error(err.response?.data?.message || 'Failed to create payment session');
     }
   };
 
@@ -287,16 +293,16 @@ export function PublicCampaignPage() {
                     {errors.paymentMethod && <p className="text-xs text-destructive">{errors.paymentMethod.message}</p>}
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="paymentReference">Transaction Reference</Label>
-                    <Input
-                      id="paymentReference"
-                      placeholder="e.g., EP-1234567890"
-                      {...register('paymentReference')}
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="isMonthly"
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                      {...register('isMonthly')}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Enter the transaction ID from your payment app
-                    </p>
+                    <Label htmlFor="isMonthly" className="mb-0 text-sm">
+                      Make this a recurring monthly donation
+                    </Label>
                   </div>
 
                   <Button

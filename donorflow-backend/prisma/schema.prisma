@@ -21,6 +21,20 @@ enum CampaignStatus {
   Completed
 }
 
+enum DonationStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  PAST_DUE
+  COMPLETED
+}
+
 model User {
   id                  Int       @id @default(autoincrement())
   email               String    @unique
@@ -70,6 +84,15 @@ model Organization {
   campaigns    Campaign[]
   donors       Donor[]
   donations    Donation[]
+  subscriptions Subscription[]
+
+  primaryColor     String    @default("#0F172A") 
+  secondaryColor   String    @default("#2563EB") 
+  registrationNo   String?   // NGO Legal Registration Number
+  websiteUrl       String?
+  taxExemption     Boolean   @default(false)
+  
+  paymentConfigs   PaymentConfig[]
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -129,6 +152,7 @@ model Campaign {
   createdBy       User?         @relation("CampaignCreator", fields: [createdById], references: [id])
 
   donations       Donation[]
+  subscriptions   Subscription[]
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -156,6 +180,7 @@ model Donor {
   createdBy       User?         @relation("DonorCreator", fields: [createdById], references: [id])
 
   donations       Donation[]
+  subscriptions   Subscription[]
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -181,6 +206,12 @@ model Donation {
   paymentMethod     String?
   paymentReference  String?
   receiptNumber     String?       @unique
+  status            DonationStatus @default(PENDING)
+  gatewaySessionId  String?
+  gatewayPaymentId  String?
+  isRecurring       Boolean       @default(false)
+  subscriptionId    Int?
+  subscription      Subscription? @relation(fields: [subscriptionId], references: [id])
   notes             String?
 
   donatedAt         DateTime      @default(now())
@@ -193,5 +224,63 @@ model Donation {
   @@index([organizationId])
   @@index([campaignId])
   @@index([donorId])
+  @@index([status])
+  @@index([gatewaySessionId])
+  @@index([gatewayPaymentId])
   @@index([donatedAt])
+}
+
+model Subscription {
+  id                      Int                 @id @default(autoincrement())
+  organizationId          Int
+  organization            Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  donorId                 Int?
+  donor                   Donor?              @relation(fields: [donorId], references: [id])
+
+  campaignId              Int
+  campaign                Campaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  amount                  Decimal             @db.Decimal(12, 2)
+  currency                String              @default("PKR")
+  interval                String              @default("MONTHLY")
+  status                  SubscriptionStatus  @default(ACTIVE)
+
+  gatewaySubscriptionId  String?
+  gatewayCustomerId      String?
+  currentPeriodEnd       DateTime?
+  nextBillingDate        DateTime?
+  cancelledAt            DateTime?
+
+  donations               Donation[]
+
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+
+  @@index([organizationId])
+  @@index([campaignId])
+  @@index([status])
+  @@index([gatewaySubscriptionId])
+}
+
+model PaymentConfig {
+  id               Int       @id @default(autoincrement())
+  provider         String    // "EASYPAISA", "JAZZCASH", "STRIPE"
+  merchantId       String?
+  apiKey           String?   // We will encrypt this in the Service layer
+  isLiveMode       Boolean   @default(false)
+  
+  organizationId   Int
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  @@unique([organizationId, provider]) // One config per provider per org
+}
+
+model AuditLog {
+  id               Int       @id @default(autoincrement())
+  action           String    // e.g., "UPDATED_LOGO", "CHANGED_PAYMENT_KEY"
+  userId           Int?
+  organizationId   Int?
+  metadata         Json?     // Store old/new values
+  createdAt        DateTime  @default(now())
 }

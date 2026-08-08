@@ -20,11 +20,14 @@ import { DonationReportsPage } from '@/features/reports/pages/DonationReportsPag
 import { CampaignReportsPage } from '@/features/reports/pages/CampaignReportsPage';
 import { DonorReportsPage } from '@/features/reports/pages/DonorReportsPage';
 import { PublicCampaignPage } from '@/features/public/pages/PublicCampaignPage';
-import { DonationSuccessPage } from '@/features/public/pages/DonationSuccessPage'
+import { DonationSuccessPage } from '@/features/public/pages/DonationSuccessPage';
+import SettingsPage from '@/features/settings/pages/Settings';
+import { SubscriptionsPage } from '@/features/payments/pages/SubscriptionsPage';
 import { UsersListPage } from '@/features/users/pages/UsersListPage';
 import { UserFormPage } from '@/features/users/pages/UserFormPage';;
 import { PublicHomePage } from '@/features/public/pages/PublicHomePage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
+
 
 export function AppRoutes() {
   return (
@@ -88,8 +91,8 @@ export function AppRoutes() {
           {/* User Routes */}
           <Route path="/users" element={<UsersListPage />} />
           <Route path="/users/new" element={<UserFormPage />} />
-
-          <Route path="/settings" element={<div className="p-8"><h1>Settings (Coming Soon)</h1></div>} />
+          <Route path="/subscriptions" element={<SubscriptionsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Route>
 
         {/* 404 */}

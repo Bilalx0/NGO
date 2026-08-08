@@ -14,6 +14,7 @@ const menuItems = [
   { label: 'Campaigns', path: '/campaigns', icon: FiHome },
   { label: 'Donors', path: '/donors', icon: FiUsers },
   { label: 'Donations', path: '/donations', icon: FiDollarSign },
+  { label: 'Subscriptions', path: '/subscriptions', icon: FiBarChart2 },
   { label: 'Reports', path: '/reports', icon: FiBarChart2 },
   { label: 'Settings', path: '/settings', icon: FiSettings },
   { label: 'Team Members', path: '/users', icon: FiUserPlus },
@@ -24,8 +25,12 @@ export function Sidebar() {
 
   return (
     <aside className="flex w-64 flex-col border-r border-slate-200 bg-white">
-      <div className="flex h-16 items-center border-b border-slate-200 px-6">
-        <h1 className="text-xl font-bold text-brand-600">DonorFlow</h1>
+      <div className="flex h-16 items-center border-b border-slate-200 px-6 pb-10 pt-12">
+        <img
+          src="/donor.png"
+          alt="DonorFlow logo"
+          className="object-contain"
+        />
       </div>
 
       <nav className="flex-1 space-y-1 p-4">
