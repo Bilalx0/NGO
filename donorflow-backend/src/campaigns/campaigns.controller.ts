@@ -12,7 +12,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
+import { CampaignType, UserRole } from '@prisma/client';
 import type { Response } from 'express';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentOrganization } from '../common/decorators/current-organization.decorator';
@@ -73,14 +73,16 @@ export class CampaignsController {
   @ApiResponse({ status: 200, description: 'Campaigns returned successfully' })
   async findAll(
     @CurrentOrganization() organizationId: number | null,
-    @Query('page', new ParseIntPipe({ optional: true })) page = 1, 
+    @Query('page', new ParseIntPipe({ optional: true })) page = 1,
     @Query('limit', new ParseIntPipe({ optional: true })) limit = 10,
+    @Query('type') type?: CampaignType,
     @Query('search') search?: string,
   ) {
     if (!organizationId) {
       throw new ForbiddenException('User does not belong to an organization');
     }
-    return this.campaignsService.findAll(organizationId, page, limit, search);
+    // ✅ PASS type TO THE SERVICE
+    return this.campaignsService.findAll(organizationId, page, limit, search, type);
   }
 
   @Get(':id')

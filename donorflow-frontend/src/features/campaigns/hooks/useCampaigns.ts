@@ -13,6 +13,7 @@ export function useCampaigns(filters: CampaignFiltersInput) {
       params.append('limit', filters.limit.toString());
       if (filters.search) params.append('search', filters.search);
       if (filters.status) params.append('status', filters.status);
+      if (filters.type) params.append('type', filters.type);
 
       const response = await api.get(`/campaigns?${params.toString()}`);
       return response.data;

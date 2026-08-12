@@ -26,6 +26,7 @@ enum DonationStatus {
   COMPLETED
   FAILED
   REFUNDED
+  EXPIRED
 }
 
 enum SubscriptionStatus {
@@ -129,6 +130,17 @@ model PasswordResetToken {
   @@index([expiresAt])
 }
 
+enum CampaignType {
+  DONATION
+  ZAKAT
+  SADQAH
+  EMERGENCY_RELIEF
+  EDUCATION
+  HEALTHCARE
+  FOOD_DRIVE
+  OTHER
+}
+
 model Campaign {
   id              Int           @id @default(autoincrement())
   organizationId  Int
@@ -137,6 +149,7 @@ model Campaign {
   title           String
   slug            String
   description     String?
+  type          CampaignType    @default(DONATION)
   category        String?
   bannerImageUrl  String?
   status          CampaignStatus @default(Draft)
@@ -162,6 +175,7 @@ model Campaign {
   @@index([isActive])
   @@index([status])
   @@index([startDate, endDate])
+  @@index([type])
 }
 
 model Donor {
@@ -274,6 +288,24 @@ model PaymentConfig {
   organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   
   @@unique([organizationId, provider]) // One config per provider per org
+}
+
+model PaymentIntent {
+  id             Int      @id @default(autoincrement())
+  reference      String   @unique
+  organizationId Int
+  campaignId     Int?
+  amount         Decimal  @db.Decimal(12, 2)
+  currency       String   @default("PKR")
+  donorName      String?
+  donorEmail     String?
+  donorPhone     String?
+  status         String   @default("INITIATED") // INITIATED | COMPLETED | FAILED
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([reference])
+  @@index([status])
 }
 
 model AuditLog {

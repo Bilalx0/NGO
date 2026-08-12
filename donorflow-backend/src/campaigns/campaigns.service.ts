@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { Campaign, CampaignStatus, Prisma } from '@prisma/client';
+import { Campaign, CampaignStatus, CampaignType, Prisma } from '@prisma/client'; // ✅ ADDED CampaignType
 import * as QRCode from 'qrcode';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
@@ -36,6 +36,7 @@ export class CampaignsService {
         title: dto.title,
         slug,
         description: dto.description,
+        type: dto.type ?? CampaignType.DONATION, // ✅ ADDED THIS
         goalAmount: new Prisma.Decimal(dto.goalAmount),
         category: dto.category,
         bannerImageUrl: dto.bannerImageUrl,
@@ -52,7 +53,14 @@ export class CampaignsService {
     };
   }
 
-  async findAll(organizationId: number | null, page: number, limit: number, search?: string): Promise<{ data: Array<Campaign & { publicUrl: string }>; total: number; page: number; limit: number }> {
+  // ✅ UPDATED SIGNATURE TO ACCEPT type
+  async findAll(
+    organizationId: number | null,
+    page: number,
+    limit: number,
+    search?: string,
+    type?: CampaignType, // ✅ ADDED THIS PARAMETER
+  ): Promise<{ data: Array<Campaign & { publicUrl: string }>; total: number; page: number; limit: number }> {
     if (!organizationId) {
       throw new ForbiddenException('User does not belong to an organization');
     }
@@ -60,6 +68,7 @@ export class CampaignsService {
     const where: Prisma.CampaignWhereInput = {
       organizationId,
       ...(search ? { title: { contains: search, mode: 'insensitive' } } : {}),
+      ...(type ? { type } : {}), // ✅ ADDED THIS FILTER
     };
 
     const [data, total] = await this.prisma.$transaction([
@@ -104,6 +113,7 @@ export class CampaignsService {
       data: {
         ...(dto.title ? { title: dto.title, slug: `${this.slugify(dto.title)}-${Date.now()}` } : {}),
         ...(dto.description !== undefined ? { description: dto.description } : {}),
+        ...(dto.type !== undefined ? { type: dto.type } : {}), // ✅ ADDED THIS
         ...(dto.goalAmount !== undefined ? { goalAmount: new Prisma.Decimal(dto.goalAmount) } : {}),
         ...(dto.category !== undefined ? { category: dto.category } : {}),
         ...(dto.bannerImageUrl !== undefined ? { bannerImageUrl: dto.bannerImageUrl } : {}),
@@ -119,28 +129,25 @@ export class CampaignsService {
 
   async remove(organizationId: number | null, campaignId: number): Promise<{ message: string }> {
     await this.findOne(organizationId, campaignId);
-
     await this.prisma.campaign.delete({ where: { id: campaignId } });
-
     return { message: 'Campaign deleted successfully' };
   }
 
   async getQrCode(campaignId: number): Promise<Buffer> {
     const campaign = await this.prisma.campaign.findUnique({ where: { id: campaignId } });
-
     if (!campaign) {
       throw new NotFoundException('Campaign not found');
     }
-
     const publicUrl = this.buildPublicUrl(campaign.slug);
     return QRCode.toBuffer(publicUrl);
   }
 
-  async findPublicCampaigns(page: number, limit: number, search?: string): Promise<{ data: Array<Campaign & { publicUrl: string }>; total: number; page: number; limit: number }> {
+  async findPublicCampaigns(page: number, limit: number, search?: string, type?: CampaignType): Promise<{ data: Array<Campaign & { publicUrl: string }>; total: number; page: number; limit: number }> {
     const where: Prisma.CampaignWhereInput = {
       status: CampaignStatus.Active,
       isActive: true,
       ...(search ? { title: { contains: search, mode: 'insensitive' } } : {}),
+      ...(type ? { type } : {}), // ✅ ADDED THIS
     };
 
     const [data, total] = await this.prisma.$transaction([

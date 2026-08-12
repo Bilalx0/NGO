@@ -18,6 +18,7 @@ export const campaignFiltersSchema = z.object({
   status: z.enum(['Draft', 'Active', 'Completed']).optional(),
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(10),
+  type: z.enum(['DONATION', 'ZAKAT', 'SADQAH', 'EMERGENCY_RELIEF', 'EDUCATION', 'HEALTHCARE', 'FOOD_DRIVE', 'OTHER']).optional(), 
 });
 
 export type CampaignFiltersInput = z.infer<typeof campaignFiltersSchema>;

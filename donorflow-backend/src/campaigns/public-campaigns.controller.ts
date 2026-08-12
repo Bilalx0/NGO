@@ -2,6 +2,7 @@ import { Controller, Get, Param, ParseIntPipe, Query } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../common/decorators/public.decorator';
 import { CampaignsService } from './campaigns.service';
+import { CampaignType } from '@prisma/client';
 
 @ApiTags('public-campaigns')
 @Controller('public/campaigns')
@@ -16,8 +17,9 @@ export class PublicCampaignsController {
     @Query('page', ParseIntPipe) page = 1,
     @Query('limit', ParseIntPipe) limit = 10,
     @Query('search') search?: string,
+    @Query('type') type?: CampaignType,
   ) {
-    return this.campaignsService.findPublicCampaigns(page, limit, search);
+    return this.campaignsService.findPublicCampaigns(page, limit, search, type);
   }
 
   @Public()

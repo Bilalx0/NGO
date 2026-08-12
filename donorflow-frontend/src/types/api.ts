@@ -120,3 +120,14 @@ export interface DashboardStats {
   donationTrends: Array<{ date: string; amount: number }>;
   topCampaigns: Array<{ title: string; raised: number; goal: number }>;
 }
+
+export enum CampaignType {
+  DONATION = 'DONATION',
+  ZAKAT = 'ZAKAT',
+  SADQAH = 'SADQAH',
+  EMERGENCY_RELIEF = 'EMERGENCY_RELIEF',
+  EDUCATION = 'EDUCATION',
+  HEALTHCARE = 'HEALTHCARE',
+  FOOD_DRIVE = 'FOOD_DRIVE',
+  OTHER = 'OTHER',
+}

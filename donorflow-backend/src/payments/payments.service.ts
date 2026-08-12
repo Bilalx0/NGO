@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SafepayService } from './safepay.service';
 import { CreatePaymentSessionDto } from './dto/create-payment-session.dto';
@@ -9,14 +10,14 @@ export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly safepay: SafepayService,
-  ) {}
+  ) { }
 
   async createSession(dto: CreatePaymentSessionDto, organizationIdFromAuth: number | null) {
-    // 1. Find campaign by slug to get organizationId
+    // 1. Find campaign by slug
     const campaign = await this.prisma.campaign.findFirst({
-      where: { 
+      where: {
         slug: dto.campaignSlug,
-        status: 'Active', // ✅ Fixed: Use PascalCase to match your Prisma enum
+        status: 'Active',
       },
       include: { organization: true },
     });
@@ -25,7 +26,6 @@ export class PaymentsService {
       throw new NotFoundException('Campaign not found or inactive');
     }
 
-    // Use the organization from the campaign (not from auth, since this is public)
     const organizationId = campaign.organizationId;
 
     // 2. Validate amount
@@ -33,55 +33,33 @@ export class PaymentsService {
       throw new BadRequestException('Minimum donation amount is PKR 50');
     }
 
-    // 3. Create or find donor
-    let donor = null;
-    if (dto.donorEmail) {
-      donor = await this.prisma.donor.findFirst({
-        where: {
-          email: dto.donorEmail,
-          organizationId,
-        },
-      });
-
-      if (!donor) {
-        donor = await this.prisma.donor.create({
-          data: {
-            fullName: dto.donorName || 'Anonymous Donor',
-            email: dto.donorEmail,
-            phone: dto.donorPhone,
-            organizationId,
-          },
-        });
-      }
-    }
-
-    // 4. Generate unique reference
+    // 3. Generate unique reference
     const reference = `DON-${Date.now()}-${randomBytes(4).toString('hex')}`;
 
-    // 5. Create pending donation record
-    const donation = await this.prisma.donation.create({
+    // 4. Create PaymentIntent (temporary tracker) — NO donation created yet
+    await this.prisma.paymentIntent.create({
       data: {
-        amount: dto.amount,
-        currency: 'PKR',
-        status: 'PENDING',
-        paymentMethod: dto.paymentMethod || 'SAFEPAY',
-        isRecurring: dto.isMonthly || false,
-        campaignId: campaign.id,
+        reference,
         organizationId,
-        donorId: donor?.id,
-        gatewaySessionId: reference,
+        campaignId: campaign.id,
+        amount: new Prisma.Decimal(dto.amount),
+        currency: 'PKR',
+        donorName: dto.donorName || null,
+        donorEmail: dto.donorEmail || null,
+        donorPhone: dto.donorPhone || null,
+        status: 'INITIATED',
       },
     });
 
-    // 6. Create SafePay checkout session
+    // 5. Create SafePay checkout session
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const checkoutUrl = await this.safepay.createCheckoutSession({
       organizationId,
       reference,
       amount: dto.amount,
       currency: 'PKR',
-      cancelUrl: `${frontendUrl}/donation/cancel`,
-      redirectUrl: `${frontendUrl}/donation/success`,
+      cancelUrl: `${frontendUrl}/donation/cancel?ref=${reference}`,
+      redirectUrl: `${frontendUrl}/donation/success?ref=${reference}`,
       isMonthly: dto.isMonthly,
       planId: process.env.SAFEPAY_DEFAULT_PLAN_ID,
     });
@@ -89,30 +67,28 @@ export class PaymentsService {
     return {
       checkoutUrl,
       reference,
-      donationId: donation.id,
     };
   }
 
   async handleSuccessfulCheckout(params: { reference: string }) {
-    // Find the donation by reference
-    const donation = await this.prisma.donation.findFirst({
-      where: { gatewaySessionId: params.reference },
+    // Find the PaymentIntent
+    const intent = await this.prisma.paymentIntent.findUnique({
+      where: { reference: params.reference },
     });
 
-    if (!donation) {
-      throw new NotFoundException('Donation not found');
+    if (!intent) {
+      throw new NotFoundException('Payment session not found');
     }
 
     // Don't mark as completed yet - wait for webhook confirmation
     return {
       status: 'pending_verification',
-      donationId: donation.id,
       reference: params.reference,
+      amount: intent.amount,
     };
   }
 
   async processWebhook(payload: any) {
-    // Handle SafePay webhook events
     const eventType = payload.event || payload.type;
     const reference = payload.order_id || payload.reference;
 
@@ -120,71 +96,173 @@ export class PaymentsService {
       return { received: false, message: 'No reference in webhook' };
     }
 
-    const donation = await this.prisma.donation.findFirst({
-      where: { gatewaySessionId: reference },
+    const intent = await this.prisma.paymentIntent.findUnique({
+      where: { reference },
     });
 
-    if (!donation) {
-      return { received: false, message: 'Donation not found' };
+    if (!intent) {
+      return { received: false, message: 'Payment intent not found' };
     }
 
-    // Update donation status based on webhook event
+    // Only process if not already completed (idempotency)
+    if (intent.status === 'COMPLETED') {
+      return { received: true, message: 'Already processed' };
+    }
+
+    // Handle successful payment
     if (eventType === 'checkout.paid' || eventType === 'payment.completed') {
       await this.prisma.$transaction(async (tx) => {
-        // Update donation
-        await tx.donation.update({
-          where: { id: donation.id },
+        // Find or create the donor
+        let donorId: number | null = null;
+        if (intent.donorEmail) {
+          const existing = await tx.donor.findFirst({
+            where: { organizationId: intent.organizationId, email: intent.donorEmail },
+          });
+          if (existing) {
+            donorId = existing.id;
+          } else {
+            const newDonor = await tx.donor.create({
+              data: {
+                organizationId: intent.organizationId,
+                fullName: intent.donorName || 'Anonymous Donor',
+                email: intent.donorEmail,
+                phone: intent.donorPhone,
+                isActive: true,
+              },
+            });
+            donorId = newDonor.id;
+          }
+        }
+
+        // NOW create the donation (only after payment confirmed)
+        await tx.donation.create({
           data: {
+            organizationId: intent.organizationId,
+            campaignId: intent.campaignId,
+            donorId,
+            amount: intent.amount,
+            currency: intent.currency,
             status: 'COMPLETED',
+            paymentMethod: 'SAFEPAY',
+            isRecurring: false,
+            receiptNumber: `RCPT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            gatewaySessionId: reference,
             gatewayPaymentId: payload.payment_id || payload.id,
           },
         });
 
-        // ✅ Fixed: Add null check for campaignId
-        if (donation.campaignId) {
+        // Increment campaign total
+        if (intent.campaignId) {
           await tx.campaign.update({
-            where: { id: donation.campaignId },
+            where: { id: intent.campaignId },
             data: {
               currentAmount: {
-                increment: donation.amount,
+                increment: intent.amount,
               },
             },
           });
         }
+
+        // Mark intent as completed
+        await tx.paymentIntent.update({
+          where: { reference },
+          data: { status: 'COMPLETED' },
+        });
       });
 
       return { received: true, message: 'Donation completed' };
     }
 
+    // Handle failed/cancelled payment
     if (eventType === 'checkout.cancelled' || eventType === 'payment.failed') {
-      await this.prisma.donation.update({
-        where: { id: donation.id },
+      await this.prisma.paymentIntent.update({
+        where: { reference },
         data: { status: 'FAILED' },
       });
 
-      return { received: true, message: 'Donation failed' };
+      return { received: true, message: 'Payment failed' };
     }
 
     return { received: true, message: 'Event processed' };
   }
 
+  async handlePaymentSuccess(reference: string, payload: any) {
+    const intent = await this.prisma.paymentIntent.findUnique({ where: { reference } });
+    if (!intent || intent.status === 'COMPLETED') return; // idempotency guard
+
+    await this.prisma.$transaction(async (tx) => {
+      // Find or create the donor
+      let donorId: number | null = null;
+      if (intent.donorEmail) {
+        const existing = await tx.donor.findFirst({
+          where: { organizationId: intent.organizationId, email: intent.donorEmail },
+        });
+        if (existing) {
+          donorId = existing.id;
+        } else {
+          const newDonor = await tx.donor.create({
+            data: {
+              organizationId: intent.organizationId,
+              fullName: intent.donorName || 'Anonymous',
+              email: intent.donorEmail,
+              phone: intent.donorPhone,
+              isActive: true,
+            },
+          });
+          donorId = newDonor.id;
+        }
+      }
+
+      // Create the REAL donation (only after payment confirmed)
+      await tx.donation.create({
+        data: {
+          organizationId: intent.organizationId,
+          campaignId: intent.campaignId,
+          donorId,
+          amount: intent.amount,
+          currency: intent.currency,
+          status: 'COMPLETED',
+          paymentMethod: 'SAFEPAY',
+          isRecurring: false,
+          receiptNumber: `RCPT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          gatewaySessionId: reference,
+          gatewayPaymentId: payload.payment_id || payload.id,
+        },
+      });
+
+      // Increment campaign total ONLY now
+      if (intent.campaignId) {
+        await tx.campaign.update({
+          where: { id: intent.campaignId },
+          data: { currentAmount: { increment: intent.amount } },
+        });
+      }
+
+      // Mark intent as done
+      await tx.paymentIntent.update({ where: { reference }, data: { status: 'COMPLETED' } });
+    });
+  }
+
   async verifySessionStatus(sessionId: string) {
+    const intent = await this.prisma.paymentIntent.findUnique({
+      where: { reference: sessionId },
+    });
+
+    if (!intent) {
+      throw new NotFoundException('Session not found');
+    }
+
+    // Check if a donation was created for this intent
     const donation = await this.prisma.donation.findFirst({
       where: { gatewaySessionId: sessionId },
     });
 
-    if (!donation) {
-      throw new NotFoundException('Session not found');
-    }
-
-    // Try to get status from SafePay API
-    const safePayStatus = await this.safepay.getSessionStatus(sessionId);
-
     return {
-      donationId: donation.id,
-      status: donation.status,
-      amount: donation.amount,
-      safePayStatus,
+      reference: intent.reference,
+      amount: intent.amount,
+      intentStatus: intent.status,
+      donationId: donation?.id,
+      donationStatus: donation?.status,
     };
   }
 
@@ -208,12 +286,10 @@ export class PaymentsService {
       throw new NotFoundException('Subscription not found');
     }
 
-    // Cancel in SafePay
     if (subscription.gatewaySubscriptionId) {
       await this.safepay.cancelSubscription(subscription.gatewaySubscriptionId, organizationId);
     }
 
-    // Update local record
     await this.prisma.subscription.update({
       where: { id: subscriptionId },
       data: {

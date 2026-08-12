@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { CampaignStatus } from '@prisma/client';
+import { CampaignStatus, CampaignType } from '@prisma/client';
 import { Transform } from 'class-transformer';
 import { IsDateString, IsEnum, IsNumber, IsOptional, IsString, IsUrl, MaxLength, Min, MinLength } from 'class-validator';
 
@@ -14,6 +14,10 @@ export class CreateCampaignDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @ApiProperty({ enum: CampaignType, default: CampaignType.DONATION })
+  @IsEnum(CampaignType)
+  type!: CampaignType;
 
   @ApiProperty({ example: 500000, description: 'Fundraising goal amount' })
   @Transform(({ value }) => (typeof value === 'string' ? Number(value) : value))

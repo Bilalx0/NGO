@@ -8,6 +8,19 @@ import type { CampaignFiltersInput } from '../schemas/campaign.schema';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/stores/authStore';
 
+// ✅ Campaign Types for the filter dropdown
+const CAMPAIGN_TYPES = [
+  { value: '', label: 'All Types' },
+  { value: 'DONATION', label: 'Donation' },
+  { value: 'ZAKAT', label: 'Zakat' },
+  { value: 'SADQAH', label: 'Sadqah' },
+  { value: 'EMERGENCY_RELIEF', label: 'Emergency Relief' },
+  { value: 'EDUCATION', label: 'Education' },
+  { value: 'HEALTHCARE', label: 'Healthcare' },
+  { value: 'FOOD_DRIVE', label: 'Food Drive' },
+  { value: 'OTHER', label: 'Other' },
+] as const;
+
 export function CampaignsListPage() {
   const { user } = useAuthStore();
   const [filters, setFilters] = useState<CampaignFiltersInput>({
@@ -23,6 +36,15 @@ export function CampaignsListPage() {
 
   const handleDelete = (id: number) => {
     deleteMutation.mutate(id);
+  };
+
+  // ✅ Helper to update type filter
+  const handleTypeChange = (type: string) => {
+    setFilters({
+      ...filters,
+      type: type || undefined,
+      page: 1, // Reset to first page when filter changes
+    });
   };
 
   if (isLoading) {
@@ -61,6 +83,32 @@ export function CampaignsListPage() {
 
       {/* Filters */}
       <CampaignFilters filters={filters} onFilterChange={setFilters} />
+
+      {/* ✅ NEW: Campaign Type Filter (below the main filters) */}
+      <div className="flex items-center gap-3">
+        <Label className="text-sm font-medium whitespace-nowrap">Filter by Type:</Label>
+        <select
+          value={filters.type || ''}
+          onChange={(e) => handleTypeChange(e.target.value)}
+          className="flex h-9 w-48 rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          {CAMPAIGN_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+        {filters.type && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleTypeChange('')}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            Clear type filter
+          </Button>
+        )}
+      </div>
 
       {/* Campaigns Grid */}
       {data?.data && data.data.length > 0 ? (
@@ -104,11 +152,11 @@ export function CampaignsListPage() {
         <div className="flex h-96 flex-col items-center justify-center rounded-xl border border-border bg-card">
           <p className="text-lg font-medium text-foreground">No campaigns found</p>
           <p className="mt-2 text-sm text-muted-foreground">
-            {filters.search || filters.status
+            {filters.search || filters.status || filters.type
               ? 'Try adjusting your filters'
               : 'Create your first campaign to get started'}
           </p>
-          {canEdit && !filters.search && !filters.status && (
+          {canEdit && !filters.search && !filters.status && !filters.type && (
             <Link to="/campaigns/new" className="mt-4">
               <Button className="bg-primary hover:bg-primary-hover">
                 <FiPlus className="mr-2 h-4 w-4" />
@@ -120,4 +168,9 @@ export function CampaignsListPage() {
       )}
     </div>
   );
+}
+
+// ✅ Label component used above (in case it's not imported already)
+function Label({ className, ...props }: React.ComponentProps<'label'>) {
+  return <label className={className} {...props} />;
 }

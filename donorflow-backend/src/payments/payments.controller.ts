@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, ParseIntPipe, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, ParseIntPipe, Post, Query, Req, HttpCode, BadRequestException,  } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { Public } from '../common/decorators/public.decorator';
@@ -62,6 +62,27 @@ export class PaymentsController {
     }
 
     return this.paymentsService.processWebhook(parsedBody);
+  }
+
+  @Public()
+  @Post('webhook')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'SafePay webhook endpoint' })
+  async handleWebhook(@Req() req: any, @Body() payload: any) {
+    // 1. Verify the webhook signature
+    const isVerified = await this.safepay.verifyWebhook({
+      headers: req.headers,
+      body: payload,
+      rawBody: req.rawBody || req.body,
+    });
+
+    if (!isVerified) {
+      throw new BadRequestException('Invalid webhook signature');
+    }
+
+    // 2. Process the verified webhook
+    const result = await this.paymentsService.processWebhook(payload);
+    return result;
   }
 
   @Public()

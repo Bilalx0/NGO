@@ -11,7 +11,18 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 
-// ✅ ADDED status to schema
+// ✅ Campaign Types matching Prisma enum
+const CAMPAIGN_TYPES = [
+  { value: 'DONATION', label: 'Donation' },
+  { value: 'ZAKAT', label: 'Zakat' },
+  { value: 'SADQAH', label: 'Sadqah' },
+  { value: 'EMERGENCY_RELIEF', label: 'Emergency Relief' },
+  { value: 'EDUCATION', label: 'Education' },
+  { value: 'HEALTHCARE', label: 'Healthcare' },
+  { value: 'FOOD_DRIVE', label: 'Food Drive' },
+  { value: 'OTHER', label: 'Other' },
+] as const;
+
 const campaignSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters'),
   description: z.string().min(10, 'Description must be at least 10 characters'),
@@ -21,7 +32,8 @@ const campaignSchema = z.object({
   bannerImageUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
   category: z.string().optional(),
   presetAmounts: z.string().optional(),
-  status: z.enum(['Draft', 'Active', 'Closed']).default('Draft'), // ✅ ADDED THIS
+  status: z.enum(['Draft', 'Active', 'Closed']).default('Draft'),
+  type: z.enum(['DONATION', 'ZAKAT', 'SADQAH', 'EMERGENCY_RELIEF', 'EDUCATION', 'HEALTHCARE', 'FOOD_DRIVE', 'OTHER']).default('DONATION'), // ✅ ADDED
 });
 
 type CampaignInput = z.infer<typeof campaignSchema>;
@@ -34,6 +46,9 @@ export function CampaignFormPage() {
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<CampaignInput>({
     resolver: zodResolver(campaignSchema) as any,
+    defaultValues: {
+      type: 'DONATION', // ✅ ADDED default
+    },
   });
 
   // Fetch campaign data if editing
@@ -57,7 +72,8 @@ export function CampaignFormPage() {
         bannerImageUrl: campaign.bannerImageUrl || '',
         category: campaign.category || '',
         presetAmounts: campaign.presetAmounts || '',
-        status: campaign.status || 'Draft', // ✅ ADDED THIS
+        status: campaign.status || 'Draft',
+        type: campaign.type || 'DONATION', // ✅ ADDED
       });
     }
   }, [campaign, reset]);
@@ -124,6 +140,32 @@ export function CampaignFormPage() {
               {errors.description && <p className="text-xs text-destructive">{errors.description.message}</p>}
             </div>
 
+            {/* ✅ NEW: Campaign Type Dropdown */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="type">Campaign Type *</Label>
+                <select
+                  id="type"
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  {...register('type')}
+                >
+                  {CAMPAIGN_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Used to categorize campaigns and enable filtering.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="category">Custom Category</Label>
+                <Input id="category" placeholder="e.g., Winter, Ramadan" {...register('category')} />
+              </div>
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="goalAmount">Goal Amount (PKR) *</Label>
@@ -132,26 +174,20 @@ export function CampaignFormPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
-                <Input id="category" placeholder="e.g., Emergency, Education, Health" {...register('category')} />
+                <Label htmlFor="status">Status *</Label>
+                <select
+                  id="status"
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  {...register('status')}
+                >
+                  <option value="Draft">Draft (Not visible to public)</option>
+                  <option value="Active">Active (Visible on public donation page)</option>
+                  <option value="Closed">Closed (No longer accepting donations)</option>
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Only "Active" campaigns will be visible to donors on the public donation page.
+                </p>
               </div>
-            </div>
-
-            {/* ✅ NEW: Status Dropdown */}
-            <div className="space-y-2">
-              <Label htmlFor="status">Status *</Label>
-              <select
-                id="status"
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                {...register('status')}
-              >
-                <option value="Draft">Draft (Not visible to public)</option>
-                <option value="Active">Active (Visible on public donation page)</option>
-                <option value="Closed">Closed (No longer accepting donations)</option>
-              </select>
-              <p className="text-xs text-muted-foreground">
-                Only "Active" campaigns will be visible to donors on the public donation page.
-              </p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">

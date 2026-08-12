@@ -11,7 +11,10 @@ async function bootstrap(): Promise<void> {
   app.setGlobalPrefix('api', {
     exclude: ['/', '/docs'],
   });
+
+  // ✅ Keep this — it's the correct way to handle webhook raw body
   app.use('/api/payments/webhook', express.raw({ type: '*/*' }));
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -20,9 +23,16 @@ async function bootstrap(): Promise<void> {
       transformOptions: { enableImplicitConversion: true },
     }),
   );
+
   app.use(cookieParser());
+
+  // ✅ FIX: Use environment variable for CORS origins
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:5173'],
+    origin: [
+      process.env.FRONTEND_URL || 'http://localhost:5173',
+      'http://localhost:5173', // Keep for local dev
+      'http://localhost:3000', // Keep for local dev
+    ],
     credentials: true,
   });
 
@@ -48,6 +58,9 @@ async function bootstrap(): Promise<void> {
 
   try {
     await app.listen(preferredPort, '0.0.0.0');
+    console.log(`🚀 Server running on port ${preferredPort}`);
+    console.log(`📚 API Docs: http://localhost:${preferredPort}/docs`);
+    console.log(`🌍 CORS origins: ${process.env.FRONTEND_URL || 'localhost'}`);
   } catch (error) {
     const err = error as NodeJS.ErrnoException;
     if (err.code === 'EADDRINUSE') {
