@@ -42,7 +42,7 @@ export function CampaignsListPage() {
   const handleTypeChange = (type: string) => {
     setFilters({
       ...filters,
-      type: type || undefined,
+      type: (type || undefined) as CampaignFiltersInput['type'], 
       page: 1, // Reset to first page when filter changes
     });
   };
