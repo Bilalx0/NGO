@@ -48,7 +48,6 @@ export function CampaignFormPage() {
 
   const [selectedPresets, setSelectedPresets] = useState<number[]>([]);
   const [customAmount, setCustomAmount] = useState('');
-  const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -166,7 +165,6 @@ export function CampaignFormPage() {
       return;
     }
 
-    setBannerFile(file);
     setBannerPreview(URL.createObjectURL(file));
     setUploading(true);
 
@@ -183,14 +181,12 @@ export function CampaignFormPage() {
     } catch (error: any) {
       toast.error('Failed to upload banner');
       setBannerPreview(null);
-      setBannerFile(null);
     } finally {
       setUploading(false);
     }
   };
 
   const removeBanner = () => {
-    setBannerFile(null);
     setBannerPreview(null);
     setValue('bannerImageUrl', '');
     if (bannerInputRef.current) {

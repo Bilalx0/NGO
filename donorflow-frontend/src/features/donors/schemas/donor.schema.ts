@@ -13,6 +13,7 @@ export type DonorInput = z.infer<typeof donorSchema>;
 export const donorFiltersSchema = z.object({
   search: z.string().optional(),
   page: z.coerce.number().min(1).default(1),
+  campaignId: z.coerce.number().optional(),
   limit: z.coerce.number().min(1).max(100).default(10),
 });
 
