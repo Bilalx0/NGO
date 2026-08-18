@@ -50,6 +50,8 @@ export function AppRoutes() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/set-password" element={<ResetPasswordPage />} />
+        <Route path="/campaign/:slug" element={<PublicCampaignPage />} />
+        <Route path="/donate/success" element={<DonationSuccessPage />} />
 
         {/* Protected Routes */}
         <Route
@@ -84,9 +86,7 @@ export function AppRoutes() {
           <Route path="/reports/campaigns" element={<CampaignReportsPage />} />
           <Route path="/reports/donors" element={<DonorReportsPage />} />
 
-          {/* Public Routes */}
-          <Route path="/campaign/:slug" element={<PublicCampaignPage />} />
-          <Route path="/donate/success" element={<DonationSuccessPage />} />
+
 
           {/* User Routes */}
           <Route path="/users" element={<UsersListPage />} />

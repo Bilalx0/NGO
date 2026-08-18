@@ -15,7 +15,7 @@ export function CampaignDetailPage() {
   const { user } = useAuthStore();
   const { data: campaign, isLoading, error } = useCampaign(Number(id));
   const deleteMutation = useDeleteCampaign();
- const [, setQrCodeUrl] = useState<string | null>(null);
+  const [, setQrCodeUrl] = useState<string | null>(null);
 
   const canEdit = user?.role === 'ORG_ADMIN' || user?.role === 'STAFF' || user?.role === 'SUPER_ADMIN';
   const canDelete = user?.role === 'ORG_ADMIN' || user?.role === 'SUPER_ADMIN';
@@ -54,6 +54,14 @@ export function CampaignDetailPage() {
         toast.error('Failed to download QR code');
       }
     }
+  };
+
+  // ✅ Helper to build full image URL
+  const getImageUrl = (path: string | null | undefined): string | undefined => {
+    if (!path) return undefined;
+    if (path.startsWith('http')) return path;
+    const baseUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000';
+    return `${baseUrl}${path}`;
   };
 
   if (isLoading) {
@@ -118,12 +126,17 @@ export function CampaignDetailPage() {
       </div>
 
       {/* Banner Image */}
+      {/* Banner Image */}
       {campaign.bannerImageUrl && (
         <div className="h-64 overflow-hidden rounded-xl bg-muted">
           <img
-            src={campaign.bannerImageUrl}
+            src={getImageUrl(campaign.bannerImageUrl)}
             alt={campaign.title}
             className="h-full w-full object-cover"
+            onError={(e) => {
+              console.error('Banner failed to load:', campaign.bannerImageUrl);
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
           />
         </div>
       )}

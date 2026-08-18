@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { FiPlus, FiSearch, FiX, FiDownload, FiUpload } from 'react-icons/fi';
+import { useQuery } from '@tanstack/react-query';
 import { useDonors, useDeleteDonor } from '../hooks/useDonors';
+import { api } from '@/lib/axios';
 import type { DonorFiltersInput } from '../schemas/donor.schema';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,28 +16,33 @@ import { DonorImportModal } from '../components/DonorImportModal';
 
 export function DonorsListPage() {
   const { user } = useAuthStore();
-
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-
-  // CRITICAL: Separate local input state from query filters
   const [searchInput, setSearchInput] = useState('');
   const [filters, setFilters] = useState<DonorFiltersInput>({ page: 1, limit: 10 });
 
-  // Debounce the search (500ms delay)
   const debouncedSearch = useDebounce(searchInput, 500);
 
-  // Only update filters when debounced value changes
+  // ✅ Fetch campaigns for the dropdown
+  const { data: campaignsData } = useQuery({
+    queryKey: ['campaigns-list'],
+    queryFn: async () => {
+      const response = await api.get('/campaigns?limit=100');
+      return response.data;
+    },
+  });
+
+  const campaigns = campaignsData?.data || [];
+
   useEffect(() => {
     setFilters((prev) => ({
       ...prev,
       search: debouncedSearch || undefined,
-      page: 1, // Reset to first page on new search
+      page: 1,
     }));
   }, [debouncedSearch]);
 
   const { data, isLoading, isFetching } = useDonors(filters);
   const deleteMutation = useDeleteDonor();
-
   const canManage = user?.role === 'ORG_ADMIN' || user?.role === 'SUPER_ADMIN';
 
   const handleDelete = (id: number) => {
@@ -81,9 +88,10 @@ export function DonorsListPage() {
         </div>
       </div>
 
-      {/* Search Filter */}
-      <div className="rounded-lg border border-border bg-card p-4">
-        <div className="w-full space-y-2">
+      {/* Filters */}
+      <div className="grid gap-4 rounded-lg border border-border bg-card p-4 md:grid-cols-2">
+        {/* Search */}
+        <div className="space-y-2">
           <Label htmlFor="search">Search Donors</Label>
           <div className="relative">
             <FiSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -101,7 +109,6 @@ export function DonorsListPage() {
                 type="button"
                 onClick={handleClearSearch}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Clear search"
               >
                 <FiX className="h-4 w-4" />
               </button>
@@ -113,6 +120,28 @@ export function DonorsListPage() {
               Searching...
             </p>
           )}
+        </div>
+
+        {/* ✅ NEW: Campaign Filter */}
+        <div className="space-y-2">
+          <Label>Filter by Campaign</Label>
+          <select
+            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+            value={filters.campaignId || ''}
+            onChange={(e) => setFilters({
+              ...filters,
+              campaignId: e.target.value ? Number(e.target.value) : undefined,
+              page: 1,
+            })}
+          >
+            <option value="">All Campaigns</option>
+            {campaigns.map((c: any) => (
+              <option key={c.id} value={c.id}>{c.title}</option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            Shows donors who donated to the selected campaign.
+          </p>
         </div>
       </div>
 
@@ -173,8 +202,8 @@ export function DonorsListPage() {
                   ) : (
                     <tr>
                       <td colSpan={4} className="px-6 py-12 text-center text-muted-foreground">
-                        {searchInput
-                          ? `No donors found matching "${searchInput}"`
+                        {searchInput || filters.campaignId
+                          ? `No donors found matching your filters`
                           : 'No donors yet. Add your first donor to get started.'}
                       </td>
                     </tr>
@@ -183,7 +212,6 @@ export function DonorsListPage() {
               </table>
             </div>
 
-            {/* Pagination */}
             {data && data.total > filters.limit && (
               <div className="flex items-center justify-between border-t border-border px-6 py-4">
                 <p className="text-sm text-muted-foreground">
@@ -191,20 +219,10 @@ export function DonorsListPage() {
                   {Math.min(filters.page * filters.limit, data.total)} of {data.total} donors
                 </p>
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={filters.page === 1}
-                    onClick={() => setFilters({ ...filters, page: filters.page - 1 })}
-                  >
+                  <Button variant="outline" size="sm" disabled={filters.page === 1} onClick={() => setFilters({ ...filters, page: filters.page - 1 })}>
                     Previous
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={filters.page >= Math.ceil(data.total / filters.limit)}
-                    onClick={() => setFilters({ ...filters, page: filters.page + 1 })}
-                  >
+                  <Button variant="outline" size="sm" disabled={filters.page >= Math.ceil(data.total / filters.limit)} onClick={() => setFilters({ ...filters, page: filters.page + 1 })}>
                     Next
                   </Button>
                 </div>
@@ -215,6 +233,5 @@ export function DonorsListPage() {
       </div>
       <DonorImportModal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} />
     </div>
-
   );
 }

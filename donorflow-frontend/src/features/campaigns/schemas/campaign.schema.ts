@@ -16,7 +16,7 @@ export const campaignSchema = z.object({
   description: z.string().optional(),
   goalAmount: z.coerce.number().min(1, 'Goal amount must be at least 1'),
   category: z.string().optional(),
-  bannerImageUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
+  bannerImageUrl: z.string().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   status: z.enum(['Draft', 'Active', 'Completed']).default('Draft'),

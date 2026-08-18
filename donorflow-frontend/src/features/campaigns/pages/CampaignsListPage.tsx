@@ -38,6 +38,7 @@ export function CampaignsListPage() {
     deleteMutation.mutate(id);
   };
 
+  
   // ✅ Helper to update type filter
   const handleTypeChange = (type: string) => {
     setFilters({

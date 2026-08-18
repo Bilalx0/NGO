@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FiPlus } from 'react-icons/fi';
+import { useQuery } from '@tanstack/react-query';
 import { useDonations } from '../hooks/useDonations';
+import { api } from '@/lib/axios';
 import type { DonationFiltersInput } from '../schemas/donation.schema';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +16,16 @@ export function DonationsListPage() {
   const [filters, setFilters] = useState<DonationFiltersInput>({ page: 1, limit: 10 });
   const { data, isLoading } = useDonations(filters);
 
+  // ✅ Fetch campaigns for the dropdown
+  const { data: campaignsData } = useQuery({
+    queryKey: ['campaigns-list'],
+    queryFn: async () => {
+      const response = await api.get('/campaigns?limit=100');
+      return response.data;
+    },
+  });
+
+  const campaigns = campaignsData?.data || [];
   const canRecord = user?.role === 'ORG_ADMIN' || user?.role === 'STAFF' || user?.role === 'SUPER_ADMIN';
 
   return (
@@ -33,20 +45,26 @@ export function DonationsListPage() {
       </div>
 
       {/* Filters */}
-      <div className="grid gap-4 rounded-lg border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 rounded-lg border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-5">
         <div className="space-y-2">
           <Label>Start Date</Label>
-          <Input type="date" onChange={(e) => setFilters({ ...filters, startDate: e.target.value })} />
+          <Input
+            type="date"
+            onChange={(e) => setFilters({ ...filters, startDate: e.target.value || undefined, page: 1 })}
+          />
         </div>
         <div className="space-y-2">
           <Label>End Date</Label>
-          <Input type="date" onChange={(e) => setFilters({ ...filters, endDate: e.target.value })} />
+          <Input
+            type="date"
+            onChange={(e) => setFilters({ ...filters, endDate: e.target.value || undefined, page: 1 })}
+          />
         </div>
         <div className="space-y-2">
           <Label>Payment Method</Label>
           <select
             className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
-            onChange={(e) => setFilters({ ...filters, paymentMethod: e.target.value || undefined })}
+            onChange={(e) => setFilters({ ...filters, paymentMethod: e.target.value || undefined, page: 1 })}
           >
             <option value="">All Methods</option>
             <option value="Cash">Cash</option>
@@ -54,8 +72,29 @@ export function DonationsListPage() {
             <option value="JazzCash">JazzCash</option>
             <option value="Bank Transfer">Bank Transfer</option>
             <option value="Card">Card</option>
+            <option value="SAFEPAY">SafePay</option>
           </select>
         </div>
+
+        {/* ✅ NEW: Campaign Filter */}
+        <div className="space-y-2">
+          <Label>Campaign</Label>
+          <select
+            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+            onChange={(e) => setFilters({
+              ...filters,
+              campaignId: e.target.value ? Number(e.target.value) : undefined,
+              page: 1,
+            })}
+            value={filters.campaignId || ''}
+          >
+            <option value="">All Campaigns</option>
+            {campaigns.map((c: any) => (
+              <option key={c.id} value={c.id}>{c.title}</option>
+            ))}
+          </select>
+        </div>
+
         <div className="flex items-end">
           <Button variant="outline" onClick={() => setFilters({ page: 1, limit: 10 })} className="w-full">
             Clear Filters
@@ -90,7 +129,15 @@ export function DonationsListPage() {
                       <tr key={donation.id} className="transition hover:bg-muted/30">
                         <td className="px-6 py-4 font-mono text-xs text-muted-foreground">{donation.receiptNumber}</td>
                         <td className="px-6 py-4 font-medium text-foreground">{donation.donor?.fullName || 'Anonymous'}</td>
-                        <td className="px-6 py-4 text-muted-foreground">{donation.campaign?.title || 'General'}</td>
+                        <td className="px-6 py-4">
+                          {donation.campaign?.title ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                              {donation.campaign.title}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">General</span>
+                          )}
+                        </td>
                         <td className="px-6 py-4 text-muted-foreground">{donation.paymentMethod || 'N/A'}</td>
                         <td className="px-6 py-4 text-muted-foreground">{formatDate(donation.donatedAt)}</td>
                         <td className="px-6 py-4 text-right font-semibold text-primary">{formatCurrency(donation.amount)}</td>

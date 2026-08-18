@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -10,8 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { X, Upload, Image as ImageIcon } from 'lucide-react';
 
-// ✅ Campaign Types matching Prisma enum
 const CAMPAIGN_TYPES = [
   { value: 'DONATION', label: 'Donation' },
   { value: 'ZAKAT', label: 'Zakat' },
@@ -23,17 +23,19 @@ const CAMPAIGN_TYPES = [
   { value: 'OTHER', label: 'Other' },
 ] as const;
 
+const PRESET_AMOUNTS = [200, 500, 1000, 5000, 10000, 25000];
+
 const campaignSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters'),
   description: z.string().min(10, 'Description must be at least 10 characters'),
   goalAmount: z.coerce.number().min(1, 'Goal must be at least 1'),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
-  bannerImageUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
+  bannerImageUrl: z.string().optional(),
   category: z.string().optional(),
   presetAmounts: z.string().optional(),
   status: z.enum(['Draft', 'Active', 'Closed']).default('Draft'),
-  type: z.enum(['DONATION', 'ZAKAT', 'SADQAH', 'EMERGENCY_RELIEF', 'EDUCATION', 'HEALTHCARE', 'FOOD_DRIVE', 'OTHER']).default('DONATION'), // ✅ ADDED
+  type: z.enum(['DONATION', 'ZAKAT', 'SADQAH', 'EMERGENCY_RELIEF', 'EDUCATION', 'HEALTHCARE', 'FOOD_DRIVE', 'OTHER']).default('DONATION'),
 });
 
 type CampaignInput = z.infer<typeof campaignSchema>;
@@ -44,14 +46,41 @@ export function CampaignFormPage() {
   const queryClient = useQueryClient();
   const isEditing = Boolean(id);
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<CampaignInput>({
+  const [selectedPresets, setSelectedPresets] = useState<number[]>([]);
+  const [customAmount, setCustomAmount] = useState('');
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<CampaignInput>({
     resolver: zodResolver(campaignSchema) as any,
     defaultValues: {
-      type: 'DONATION', // ✅ ADDED default
+      type: 'DONATION',
+      presetAmounts: '',
+      bannerImageUrl: '',
     },
   });
 
-  // Fetch campaign data if editing
+  const presetAmountsValue = watch('presetAmounts') || '';
+  const bannerImageUrlValue = watch('bannerImageUrl') || '';
+
+  useEffect(() => {
+    if (presetAmountsValue) {
+      const parsed = presetAmountsValue
+        .split(',')
+        .map(s => parseInt(s.trim(), 10))
+        .filter(n => !isNaN(n));
+      setSelectedPresets(parsed);
+    }
+  }, [presetAmountsValue]);
+
+  useEffect(() => {
+    if (bannerImageUrlValue && !bannerPreview) {
+      setBannerPreview(`${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000'}${bannerImageUrlValue}`);
+    }
+  }, [bannerImageUrlValue, bannerPreview]);
+
   const { data: campaign, isLoading: isLoadingCampaign } = useQuery({
     queryKey: ['campaign', id],
     queryFn: async () => {
@@ -73,7 +102,7 @@ export function CampaignFormPage() {
         category: campaign.category || '',
         presetAmounts: campaign.presetAmounts || '',
         status: campaign.status || 'Draft',
-        type: campaign.type || 'DONATION', // ✅ ADDED
+        type: campaign.type || 'DONATION',
       });
     }
   }, [campaign, reset]);
@@ -98,6 +127,75 @@ export function CampaignFormPage() {
 
   const onSubmit = async (data: CampaignInput) => {
     await mutation.mutateAsync(data);
+  };
+
+  const togglePreset = (amount: number) => {
+    let newPresets: number[];
+    if (selectedPresets.includes(amount)) {
+      newPresets = selectedPresets.filter(p => p !== amount);
+    } else {
+      newPresets = [...selectedPresets, amount].sort((a, b) => a - b);
+    }
+    setSelectedPresets(newPresets);
+    setValue('presetAmounts', newPresets.join(','));
+  };
+
+  const removePreset = (amount: number) => {
+    const newPresets = selectedPresets.filter(p => p !== amount);
+    setSelectedPresets(newPresets);
+    setValue('presetAmounts', newPresets.join(','));
+  };
+
+  const addCustomAmount = () => {
+    const amount = parseInt(customAmount, 10);
+    if (!isNaN(amount) && amount > 0 && !selectedPresets.includes(amount)) {
+      const newPresets = [...selectedPresets, amount].sort((a, b) => a - b);
+      setSelectedPresets(newPresets);
+      setValue('presetAmounts', newPresets.join(','));
+      setCustomAmount('');
+    }
+  };
+
+  // ✅ Handle banner file selection
+  const handleBannerChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Banner image must be less than 5MB');
+      return;
+    }
+
+    setBannerFile(file);
+    setBannerPreview(URL.createObjectURL(file));
+    setUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('banner', file);
+
+      const response = await api.post('/campaigns/upload-banner', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      setValue('bannerImageUrl', response.data.bannerUrl);
+      toast.success('Banner uploaded successfully!');
+    } catch (error: any) {
+      toast.error('Failed to upload banner');
+      setBannerPreview(null);
+      setBannerFile(null);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeBanner = () => {
+    setBannerFile(null);
+    setBannerPreview(null);
+    setValue('bannerImageUrl', '');
+    if (bannerInputRef.current) {
+      bannerInputRef.current.value = '';
+    }
   };
 
   if (isEditing && isLoadingCampaign) {
@@ -140,7 +238,6 @@ export function CampaignFormPage() {
               {errors.description && <p className="text-xs text-destructive">{errors.description.message}</p>}
             </div>
 
-            {/* ✅ NEW: Campaign Type Dropdown */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="type">Campaign Type *</Label>
@@ -155,9 +252,6 @@ export function CampaignFormPage() {
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-muted-foreground">
-                  Used to categorize campaigns and enable filtering.
-                </p>
               </div>
 
               <div className="space-y-2">
@@ -180,13 +274,10 @@ export function CampaignFormPage() {
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   {...register('status')}
                 >
-                  <option value="Draft">Draft (Not visible to public)</option>
-                  <option value="Active">Active (Visible on public donation page)</option>
-                  <option value="Closed">Closed (No longer accepting donations)</option>
+                  <option value="Draft">Draft</option>
+                  <option value="Active">Active</option>
+                  <option value="Closed">Closed</option>
                 </select>
-                <p className="text-xs text-muted-foreground">
-                  Only "Active" campaigns will be visible to donors on the public donation page.
-                </p>
               </div>
             </div>
 
@@ -202,29 +293,154 @@ export function CampaignFormPage() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="bannerImageUrl">Banner Image URL</Label>
-              <Input id="bannerImageUrl" placeholder="https://example.com/image.jpg" {...register('bannerImageUrl')} />
-              {errors.bannerImageUrl && <p className="text-xs text-destructive">{errors.bannerImageUrl.message}</p>}
+            {/* ✅ NEW: Banner Image Upload */}
+            <div className="space-y-3 rounded-lg border border-border p-4 bg-muted/30">
+              <div className="space-y-1">
+                <Label className="text-base font-semibold">Campaign Banner Image</Label>
+                <p className="text-xs text-muted-foreground">
+                  Upload a banner image for your campaign (JPG, PNG, WebP, max 5MB)
+                </p>
+              </div>
+
+              {bannerPreview ? (
+                <div className="relative rounded-lg overflow-hidden border border-border">
+                  <img
+                    src={bannerPreview}
+                    alt="Banner preview"
+                    className="w-full h-48 object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={removeBanner}
+                    className="absolute top-2 right-2 bg-destructive text-white rounded-full p-1.5 hover:bg-destructive/80 transition-colors"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="border-2 border-dashed border-muted-foreground/30 rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
+                  <ImageIcon className="h-12 w-12 mx-auto text-muted-foreground/50 mb-2" />
+                  <p className="text-sm text-muted-foreground mb-3">No banner uploaded</p>
+                </div>
+              )}
+
+              <input
+                ref={bannerInputRef}
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/webp"
+                onChange={handleBannerChange}
+                className="hidden"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => bannerInputRef.current?.click()}
+                disabled={uploading}
+                className="w-full"
+              >
+                {uploading ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent mr-2" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    {bannerPreview ? 'Replace Banner' : 'Upload Banner'}
+                  </>
+                )}
+              </Button>
+
+              <input type="hidden" {...register('bannerImageUrl')} />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="presetAmounts">Quick-Select Amounts (Optional)</Label>
-              <Input
-                id="presetAmounts"
-                placeholder="e.g., 500, 1000, 5000, 10000"
-                {...register('presetAmounts')}
-              />
-              <p className="text-xs text-muted-foreground">
-                Comma-separated amounts. These will appear as quick-select buttons on the public donation page.
-              </p>
+            {/* Preset Amounts Section */}
+            <div className="space-y-3 rounded-lg border border-border p-4 bg-muted/30">
+              <div className="space-y-1">
+                <Label className="text-base font-semibold">Quick-Select Donation Amounts</Label>
+                <p className="text-xs text-muted-foreground">
+                  Click amounts donors can choose from on the public donation page.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {PRESET_AMOUNTS.map((amount) => {
+                  const isSelected = selectedPresets.includes(amount);
+                  return (
+                    <button
+                      key={amount}
+                      type="button"
+                      onClick={() => togglePreset(amount)}
+                      className={`
+                        px-4 py-2 rounded-full text-sm font-medium transition-all
+                        ${isSelected
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'bg-background border border-border hover:bg-accent hover:border-primary/50'
+                        }
+                      `}
+                    >
+                      RS {amount.toLocaleString()}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {selectedPresets.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-border">
+                  <Label className="text-sm">Selected ({selectedPresets.length}):</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedPresets.map((amount) => (
+                      <span
+                        key={amount}
+                        className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium"
+                      >
+                        RS {amount.toLocaleString()}
+                        <button
+                          type="button"
+                          onClick={() => removePreset(amount)}
+                          className="hover:bg-primary/20 rounded-full p-0.5 transition-colors"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <Input
+                  type="number"
+                  placeholder="Custom amount"
+                  value={customAmount}
+                  onChange={(e) => setCustomAmount(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addCustomAmount();
+                    }
+                  }}
+                  className="flex-1"
+                  min="1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addCustomAmount}
+                  disabled={!customAmount || isNaN(parseInt(customAmount, 10))}
+                >
+                  Add Custom
+                </Button>
+              </div>
+
+              <input type="hidden" {...register('presetAmounts')} />
             </div>
 
             <div className="flex gap-4 pt-4">
               <Button
                 type="submit"
                 className="flex-1 bg-primary hover:bg-primary-hover"
-                disabled={isSubmitting || mutation.isPending}
+                disabled={isSubmitting || mutation.isPending || uploading}
               >
                 {isSubmitting || mutation.isPending ? 'Saving...' : isEditing ? 'Update Campaign' : 'Create Campaign'}
               </Button>

@@ -31,9 +31,9 @@ export class UpdateCampaignDto {
   @IsString()
   category?: string;
 
-  @ApiPropertyOptional({ example: 'https://example.com/banner.png', description: 'Banner image URL' })
+  @ApiPropertyOptional({ example: '/uploads/banner-123.jpg' })
   @IsOptional()
-  @IsUrl()
+  @IsString()
   bannerImageUrl?: string;
 
   @ApiPropertyOptional({ example: '2026-07-01', description: 'Campaign start date' })

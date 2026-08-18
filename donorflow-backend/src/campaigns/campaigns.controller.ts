@@ -9,10 +9,13 @@ import {
   Patch,
   Post,
   Query,
-  Res,
+  Res, UseInterceptors, UploadedFile, BadRequestException
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CampaignType, UserRole } from '@prisma/client';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
 import type { Response } from 'express';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentOrganization } from '../common/decorators/current-organization.decorator';
@@ -26,7 +29,7 @@ import { CampaignsService } from './campaigns.service';
 @ApiTags('campaigns')
 @Controller('campaigns')
 export class CampaignsController {
-  constructor(private readonly campaignsService: CampaignsService) {}
+  constructor(private readonly campaignsService: CampaignsService) { }
 
   @Post()
   @Roles(UserRole.ORG_ADMIN, UserRole.STAFF, UserRole.SUPER_ADMIN)
@@ -83,6 +86,47 @@ export class CampaignsController {
     }
     // ✅ PASS type TO THE SERVICE
     return this.campaignsService.findAll(organizationId, page, limit, search, type);
+  }
+
+  @Post('upload-banner')
+  @Roles(UserRole.ORG_ADMIN, UserRole.STAFF, UserRole.SUPER_ADMIN)
+  @ApiBearerAuth('access-token')
+  @UseInterceptors(FileInterceptor('banner', {
+    storage: diskStorage({
+      destination: './uploads',
+      filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        const ext = extname(file.originalname);
+        cb(null, `banner-${uniqueSuffix}${ext}`);
+      },
+    }),
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB max
+    },
+    fileFilter: (req, file, cb) => {
+      if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
+        return cb(new Error('Only image files (JPG, PNG, WebP) are allowed'), false);
+      }
+      cb(null, true);
+    },
+  }))
+  @ApiOperation({ summary: 'Upload campaign banner image' })
+  async uploadBanner(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentOrganization() organizationId: number | null,
+  ) {
+    if (!organizationId) {
+      throw new ForbiddenException('User does not belong to an organization');
+    }
+
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    return {
+      bannerUrl: `/uploads/${file.filename}`,
+      originalName: file.originalname,
+    };
   }
 
   @Get(':id')

@@ -13,8 +13,8 @@ interface CampaignCardProps {
 }
 
 export function CampaignCard({ campaign, onDelete, canEdit, canDelete }: CampaignCardProps) {
-  const progress = campaign.goalAmount > 0 
-    ? (campaign.currentAmount / campaign.goalAmount) * 100 
+  const progress = campaign.goalAmount > 0
+    ? (campaign.currentAmount / campaign.goalAmount) * 100
     : 0;
 
   const statusColors = {
@@ -23,13 +23,20 @@ export function CampaignCard({ campaign, onDelete, canEdit, canDelete }: Campaig
     Completed: 'bg-blue-100 text-blue-700',
   };
 
+  const getImageUrl = (path: string | null | undefined): string | undefined => {
+    if (!path) return undefined;  // ✅ Changed from null to undefined
+    if (path.startsWith('http')) return path;
+    const baseUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000';
+    return `${baseUrl}${path}`;
+  };
+
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-sm transition hover:shadow-md">
       {/* Banner Image */}
       {campaign.bannerImageUrl && (
         <div className="mb-4 h-48 overflow-hidden rounded-lg bg-muted">
           <img
-            src={campaign.bannerImageUrl}
+            src={getImageUrl(campaign.bannerImageUrl)}
             alt={campaign.title}
             className="h-full w-full object-cover"
           />
